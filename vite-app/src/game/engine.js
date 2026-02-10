@@ -1,29 +1,22 @@
+// src/game/engine.js
+import { ensureAudio, playBeep } from "./audio.js";
+import { dishes, keyLabels, PENALTY } from "./data.js";
+import {
+  drawBackground,
+  drawHeroAlert,
+  drawPlate,
+  drawComboFlames,
+  drawDishInfo,
+  drawInstructions,
+  drawTitle,
+  drawGameOver,
+  drawWin
+} from "./render.js";
+
 export function createGame({ canvas, startBtn, restartBtn, hud }) {
   /* ================= CANVAS ================= */
   const ctx = canvas.getContext("2d");
   ctx.imageSmoothingEnabled = false;
-
-  /* ================= AUDIO ================= */
-  let audioCtx = null;
-
-  async function ensureAudio() {
-    if (!audioCtx) audioCtx = new (window.AudioContext || window.webkitAudioContext)();
-    if (audioCtx.state === "suspended") await audioCtx.resume();
-  }
-
-  function playBeep(freq = 500, dur = 0.08) {
-    if (!audioCtx) return;
-    const osc = audioCtx.createOscillator();
-    const gain = audioCtx.createGain();
-    osc.frequency.value = freq;
-    osc.connect(gain);
-    gain.connect(audioCtx.destination);
-    osc.start();
-
-    gain.gain.setValueAtTime(0.2, audioCtx.currentTime);
-    gain.gain.exponentialRampToValueAtTime(0.001, audioCtx.currentTime + dur);
-    osc.stop(audioCtx.currentTime + dur);
-  }
 
   /* ================= ASSETS ================= */
   const assets = {};
@@ -53,107 +46,20 @@ export function createGame({ canvas, startBtn, restartBtn, hud }) {
     ]);
   }
 
-  /* ================= DATA ================= */
-  const ingredientPool = {
-    chicken: { sprite: "chicken" },
-    pork: { sprite: "pork" },
-    garlic: { sprite: "garlic" },
-    ginger: { sprite: "ginger" },
-    chili: { sprite: "chili" },
-    shrimp: { sprite: "shrimp" },
-    coconut: { sprite: "coconut" },
-    rice: { sprite: "rice" }
-  };
-
-  const STIR_WIDTH = 0.40;       // 40%
-  const STIR_CENTER = 0.50;      // middle of the bar
-
-  const STIR_PERFECT = [
-    STIR_CENTER - STIR_WIDTH / 2,
-    STIR_CENTER + STIR_WIDTH / 2
-  ];
-
-  const dishes = [
-    {
-      name: "AYAM BUAH KELUAK",
-      culture: "Peranakan",
-      ingredients: ["chicken", "garlic", "ginger", "chili"],
-      steps: [
-        { type: "prep", label: "Blend rempah (hit the right keys)", uses: ["garlic","ginger","chili"], counts: { garlic: 3, ginger: 3, chili: 4 } },
-        { type: "cook", label: "Fry rempah (HOLD SPACE in green)", time: 4.0, stirPerfectWindow: STIR_PERFECT },
-        { type: "serve", label: "Serve: press ENTER" },
-        { type: "action", label: "Coat chicken", uses: ["chicken"], counts: { chicken: 3 } },
-        { type: "cook", label: "Simmer until tender (HOLD SPACE in green)", time: 4.0, stirPerfectWindow: STIR_PERFECT },
-        { type: "serve", label: "Serve: press ENTER" }
-      ]
-    },
-    {
-      name: "CURRY FENG",
-      culture: "Eurasian",
-      ingredients: ["pork", "garlic", "ginger", "chili"],
-      steps: [
-        { type: "prep", label: "Prep aromatics", uses: ["garlic","ginger"], counts: { garlic: 4, ginger: 4 } },
-        { type: "cook", label: "Fry aromatics (HOLD SPACE in green)", time: 4.0, stirPerfectWindow: STIR_PERFECT },
-        { type: "serve", label: "Serve: press ENTER" },
-        { type: "action", label: "Add pork", uses: ["pork"], counts: { pork: 2 } },
-        { type: "cook", label: "Simmer curry (HOLD SPACE in green)", time: 4.0, stirPerfectWindow: STIR_PERFECT },
-        { type: "serve", label: "Serve: press ENTER" }
-      ]
-    },
-    {
-      name: "LAKSA SIGLAP",
-      culture: "Malay",
-      ingredients: ["shrimp", "coconut", "chili", "rice"],
-      steps: [
-        // NEW: chili entry step BEFORE chili paste stirring step
-        { type: "action", label: "Add chili (make the paste)", uses: ["chili"], counts: { chili: 3 } },
-
-        // UPDATED: cook step total time = 8 seconds
-        { type: "cook", label: "Sauté chili paste (HOLD SPACE in green)", time: 4.0, stirPerfectWindow: STIR_PERFECT },
-        { type: "serve", label: "Serve: press ENTER" },
-
-        { type: "action", label: "Add coconut milk", uses: ["coconut"], counts: { coconut: 2 } },
-        { type: "cook", label: "Simmer broth (HOLD SPACE in green)", time: 4.0, stirPerfectWindow: STIR_PERFECT },
-        { type: "serve", label: "Serve: press ENTER" },
-
-        { type: "action", label: "Add shrimp", uses: ["shrimp"], counts: { shrimp: 3 } },
-
-        { type: "cook", label: "Cook shrimp quickly (no stir)", time: 4.0, stirPerfectWindow: null },
-        { type: "serve", label: "Serve: press ENTER" },
-
-        { type: "action", label: "Serve with rice", uses: ["rice"], counts: { rice: 2 } },
-        { type: "serve", label: "Final serve: press ENTER" }
-      ]
-    },
-    {
-      name: "LOR KAI YIK",
-      culture: "Chinese",
-      ingredients: ["chicken", "garlic", "ginger", "rice"],
-      steps: [
-        { type: "prep", label: "Prep garlic/ginger", uses: ["garlic","ginger"], counts: { garlic: 3, ginger: 4 } },
-
-        { type: "action", label: "Add chicken pieces", uses: ["chicken"], counts: { chicken: 2 } },
-
-        { type: "cook", label: "Simmer chicken (HOLD SPACE in green)", time: 4.0, stirPerfectWindow: STIR_PERFECT },
-        { type: "serve", label: "Serve: press ENTER" },
-        { type: "action", label: "Add rice", uses: ["rice"], counts: { rice: 2 } },
-        { type: "serve", label: "Final serve: press ENTER" }
-      ]
-    }
-  ];
-
   /* ================= GAME STATE ================= */
   const game = {
     state: "menu",
     score: 0,
     combo: 0,
     time: 180,
+
     uniqueDishesCompleted: new Set(),
     dishesToWin: dishes.length,
+
     shakeOffsetX: 0,
     shakeOffsetY: 0,
     shakeSampleT: 0,
-    shakeHz: 1, // lower = slower vibration (try 6–15)
+    shakeHz: 1, // lower = slower vibration
 
     currentDish: null,
 
@@ -175,7 +81,6 @@ export function createGame({ canvas, startBtn, restartBtn, hud }) {
     dishCountdown: 0
   };
 
-  const keyLabels = ["Q", "W", "E", "R"];
   let titleTime = 0;
   let timer = null;
   let assetsLoaded = false;
@@ -193,27 +98,14 @@ export function createGame({ canvas, startBtn, restartBtn, hud }) {
     if (alertState.ttl > 0) alertState.ttl = Math.max(0, alertState.ttl - dt);
   }
 
-  /* ================= PENALTIES ================= */
-  const PENALTY = {
-    wrongInputScore: 120,
-    wrongEnterScore: 160,
-    wrongStirScore: 160,
-
-    wrongInputTime: 0,
-    wrongEnterTime: 1,
-    wrongStirTime: 0,
-
-    // UPDATED: decreased vibration intensity
-    shake: 6,
-    comboReset: true
-  };
-
+  /* ================= HUD ================= */
   function updateHUD() {
     hud.scoreEl.textContent = game.score;
     hud.comboEl.textContent = game.combo + "x";
     hud.timeEl.textContent = game.time;
   }
 
+  /* ================= PENALTIES ================= */
   function applyPenalty(kind = "wrongInput") {
     let scoreLoss = PENALTY.wrongInputScore;
     let timeLoss = PENALTY.wrongInputTime;
@@ -293,35 +185,30 @@ export function createGame({ canvas, startBtn, restartBtn, hud }) {
     updateHUD();
   }
 
-function finishDish() {
-  // score reward
-  game.score += 1000;
-  game.combo += 2;
+  function finishDish() {
+    game.score += 1000;
+    game.combo += 2;
 
-  // Mark this unique dish as completed
-  if (game.currentDish?.name) game.uniqueDishesCompleted.add(game.currentDish.name);
+    if (game.currentDish?.name) game.uniqueDishesCompleted.add(game.currentDish.name);
 
-  // WIN: all unique dishes completed before time runs out
-  if (game.uniqueDishesCompleted.size >= game.dishesToWin) {
-    game.state = "win";
-    setAlert("ALL UNIQUE DISHES COMPLETE!", "rgba(128, 255, 114, 0.92)", 1.2);
+    if (game.uniqueDishesCompleted.size >= game.dishesToWin) {
+      game.state = "win";
+      setAlert("ALL UNIQUE DISHES COMPLETE!", "rgba(128, 255, 114, 0.92)", 1.2);
 
-    if (timer) { clearInterval(timer); timer = null; } // stop clock [web:395]
+      if (timer) { clearInterval(timer); timer = null; }
 
-    startBtn.textContent = "PLAY AGAIN";
-    startBtn.style.display = "block";
-    restartBtn.style.display = "none";
+      startBtn.textContent = "PLAY AGAIN";
+      startBtn.style.display = "block";
+      restartBtn.style.display = "none";
 
+      updateHUD();
+      return;
+    }
+
+    setAlert("DISH COMPLETE!", "rgba(128, 255, 114, 0.92)", 0.9);
+    loadDish();
     updateHUD();
-    return;
   }
-
-  // otherwise load next random dish
-  setAlert("DISH COMPLETE!", "rgba(128, 255, 114, 0.92)", 0.9);
-  loadDish();
-  updateHUD();
-}
-
 
   function advanceStep() {
     game.stepIndex++;
@@ -343,6 +230,7 @@ function finishDish() {
   function startGame() {
     game.uniqueDishesCompleted = new Set();
     game.dishesToWin = dishes.length;
+
     game.score = 0;
     game.combo = 0;
     game.time = 180;
@@ -552,289 +440,18 @@ function finishDish() {
     }
   }
 
-  /* ================= DRAW ================= */
-  function drawBackground() {
-    if (assets.bg) ctx.drawImage(assets.bg, 0, 0, canvas.width, canvas.height);
-  }
-
-  function drawHeroAlert() {
-    if (alertState.ttl <= 0 || !alertState.text) return;
-
-    const w = Math.min(980, canvas.width - 60);
-    const h = 56;
-    const x = (canvas.width - w) / 2;
-    const y = 120;
-
-    ctx.save();
-    ctx.fillStyle = alertState.color;
-    ctx.fillRect(x, y, w, h);
-    ctx.strokeStyle = "rgba(255,255,255,0.35)";
-    ctx.strokeRect(x, y, w, h);
-
-    ctx.font = "bold 24px Courier New";
-    ctx.textAlign = "center";
-    ctx.fillStyle = "#111";
-    ctx.fillText(alertState.text, canvas.width / 2, y + 36);
-    ctx.restore();
-  }
-
-  function drawCookBar(step, y = canvas.height - 260) {
-    const w = Math.min(760, canvas.width - 80);
-    const h = 20;
-    const x = (canvas.width - w) / 2;
-
-    const p = Math.max(0, Math.min(1.15, game.stepProgress));
-    ctx.fillStyle = "#222";
-    ctx.fillRect(x, y, w, h);
-
-    const clamp = (v) => Math.max(0, Math.min(1.15, v));
-    const win = step.stirPerfectWindow;
-
-    if (win) {
-      const sx0 = x + clamp(win[0]) * w;
-      const sx1 = x + clamp(win[1]) * w;
-      ctx.fillStyle = "rgba(128,255,114,0.28)";
-      ctx.fillRect(sx0, y, Math.max(2, sx1 - sx0), h);
-    }
-
-    const fillW = Math.min(1.0, p) * w;
-    ctx.fillStyle = game.stirredThisStep ? "#80ff72" : "#4cc9f0";
-    ctx.fillRect(x, y, fillW, h);
-
-    ctx.strokeStyle = "#fff";
-    ctx.strokeRect(x, y, w, h);
-  }
-
-  function drawPlate() {
-    if (!assets.plate) return;
-
-    // dt-driven shake sampling should happen in your main update/loop, but you can do it here if needed.
-    // Better: call updateShake(dt) once per frame and only read offsets here.
-    const cx = canvas.width / 2 + game.shakeOffsetX;
-    const cy = canvas.height / 2 + 80 + game.shakeOffsetY;
-
-    if (game.shake > 0) game.shake--;
-
-    ctx.drawImage(assets.plate, cx - 200, cy - 130, 400, 260);
-
-    const entries = Object.entries(game.ingCounts);
-    let totalIcons = 0;
-    for (const [, v] of entries) totalIcons += Math.max(0, v.done | 0);
-    if (totalIcons <= 0) return;
-
-    const maxIcons = 28;
-    totalIcons = Math.min(totalIcons, maxIcons);
-
-    const size = 120;
-
-    let iconIndex = 0;
-    for (const [ing, v] of entries) {
-      const img = assets[ingredientPool[ing]?.sprite];
-      if (!img) continue;
-
-      const count = Math.min(v.done | 0, maxIcons - iconIndex);
-      for (let k = 0; k < count; k++) {
-        const t = iconIndex / Math.max(1, totalIcons);
-        const angle = t * Math.PI * 2;
-
-        const r1 = 85 + (iconIndex % 3) * 12;
-        const r2 = 55 + ((iconIndex + 1) % 3) * 10;
-
-        const x = Math.round(cx + Math.cos(angle) * r1 + (Math.random() - 0.5) * 10 - size / 2);
-        const y = Math.round(cy + Math.sin(angle) * r2 + (Math.random() - 0.5) * 10 - size / 2);
-
-        ctx.drawImage(img, x, y, size, size); // scaled via drawImage width/height [web:371][web:393]
-
-        iconIndex++;
-        if (iconIndex >= totalIcons) return;
-      }
-    }
-  }
-
+  /* ================= SHAKE UPDATE ================= */
   function updateShake(dt) {
-  // decay intensity
-  if (game.shake > 0) game.shake = Math.max(0, game.shake - 0.8); // tune decay speed
+    if (game.shake > 0) game.shake = Math.max(0, game.shake - 0.8);
 
-  // sample a new random offset at a fixed rate
-  game.shakeSampleT += dt;
-  const interval = 1 / game.shakeHz;
+    game.shakeSampleT += dt;
+    const interval = 1 / game.shakeHz;
 
-  if (game.shakeSampleT >= interval) {
-    game.shakeSampleT = 0;
-
-    // new target offsets (slower changes)
-    game.shakeOffsetX = (Math.random() - 0.5) * game.shake;
-    game.shakeOffsetY = (Math.random() - 0.5) * game.shake;
-  }
-}
-
-
-  function drawComboFlames() {
-    if (game.combo < 3) return;
-    ctx.fillStyle = "orange";
-    ctx.font = "bold 40px Courier New";
-    ctx.textAlign = "center";
-    ctx.fillText("COMBO!", canvas.width / 2, 120);
-  }
-
-function drawDishInfo() {
-  if (!game.currentDish) return;
-
-  const title = `${game.currentDish.name} (${game.currentDish.culture})`;
-
-  const haveProgress =
-    game.uniqueDishesCompleted &&
-    typeof game.uniqueDishesCompleted.size === "number" &&
-    typeof game.dishesToWin === "number";
-
-  // Subtitle now includes progress as part of the same line
-  const subtitle = haveProgress
-    ? `Unique dishes completed: ${game.uniqueDishesCompleted.size}/${game.dishesToWin}`
-    : "";
-
-  const cx = canvas.width / 2;
-
-  // Layout
-  const titleY = 80;
-  const subtitleY = titleY + 38;
-
-  // Banner behind both lines
-  const bannerW = Math.min(980, canvas.width - 80);
-  const bannerH = subtitle ? 92 : 76;
-  const bannerX = (canvas.width - bannerW) / 2;
-  const bannerY = titleY - 54;
-
-  ctx.save();
-
-  // Banner
-  ctx.fillStyle = "rgba(0,0,0,0.45)";
-  ctx.fillRect(bannerX, bannerY, bannerW, bannerH);
-
-  ctx.strokeStyle = "rgba(255,255,255,0.18)";
-  ctx.lineWidth = 2;
-  ctx.strokeRect(bannerX, bannerY, bannerW, bannerH);
-
-  // HERO title
-  ctx.textAlign = "center";
-  ctx.textBaseline = "middle";
-
-  ctx.font = "bold 44px Courier New";
-  ctx.lineWidth = 6;
-
-  ctx.shadowColor = "rgba(255, 224, 102, 0.90)";
-  ctx.shadowBlur = 14;
-
-  ctx.strokeStyle = "rgba(0,0,0,0.85)";
-  ctx.strokeText(title, cx, titleY); // outline [web:331]
-
-  ctx.fillStyle = "#ffe066";
-  ctx.fillText(title, cx, titleY);   // fill [web:331]
-
-  // Subtitle (single line, inside banner)
-  if (subtitle) {
-    ctx.shadowBlur = 0;
-    ctx.font = "bold 18px Courier New";
-    ctx.fillStyle = "rgba(255,255,255,0.92)";
-    ctx.fillText(subtitle, cx, subtitleY); // [web:331]
-  }
-
-  ctx.restore();
-}
-
-
-
-  function drawPanel(x, y, w, h, alpha = 0.62) {
-    ctx.save();
-    ctx.fillStyle = `rgba(0,0,0,${alpha})`;
-    ctx.fillRect(x, y, w, h);
-    ctx.strokeStyle = "rgba(255,255,255,0.22)";
-    ctx.strokeRect(x, y, w, h);
-    ctx.restore();
-  }
-
-  function wrapLines(text, maxWidth) {
-    const words = String(text).split(/\s+/);
-    const lines = [];
-    let line = "";
-    for (const word of words) {
-      const test = line ? line + " " + word : word;
-      if (ctx.measureText(test).width <= maxWidth) line = test;
-      else { if (line) lines.push(line); line = word; }
+    if (game.shakeSampleT >= interval) {
+      game.shakeSampleT = 0;
+      game.shakeOffsetX = (Math.random() - 0.5) * game.shake;
+      game.shakeOffsetY = (Math.random() - 0.5) * game.shake;
     }
-    if (line) lines.push(line);
-    return lines;
-  }
-
-  function drawWrappedText(text, x, y, maxWidth, lineHeight) {
-    const lines = wrapLines(text, maxWidth);
-    lines.forEach((ln, i) => ctx.fillText(ln, x, y + i * lineHeight));
-    return lines.length;
-  }
-
-  function drawInstructions() {
-    if (!game.currentDish) return;
-    const step = currentStep();
-    if (!step) return;
-
-    const panelW = Math.min(980, canvas.width - 80);
-    const panelX = (canvas.width - panelW) / 2;
-    const panelY = canvas.height - 190;
-    const panelH = 130;
-
-    drawPanel(panelX, panelY, panelW, panelH);
-
-    ctx.textAlign = "left";
-    ctx.fillStyle = "#fff";
-    ctx.font = "bold 18px Courier New";
-    ctx.fillText(`Step ${game.stepIndex + 1}/${game.steps.length}`, panelX + 18, panelY + 28);
-
-    ctx.font = "bold 24px Courier New";
-    ctx.fillStyle = "#ffe066";
-    const lines = drawWrappedText(step.label, panelX + 18, panelY + 58, panelW - 36, 28);
-
-    ctx.font = "16px Courier New";
-    ctx.fillStyle = "#d7d7d7";
-    const controlsY = panelY + 58 + lines * 28 + 8;
-
-    if (game.dishCountdown > 0) {
-      ctx.fillStyle = "#fff";
-      ctx.fillText(`Starting in ${game.dishCountdown}... (input locked)`, panelX + 18, controlsY);
-      return;
-    }
-
-    if (step.type === "prep" || step.type === "action") {
-      const show = (step.uses && step.uses.length) ? step.uses : game.sequence;
-      const parts = [];
-
-      for (const ing of show.slice(0, 4)) {
-        const need = getNeededForStep(step, ing);
-        const done = getDoneForStep(step, ing);
-        const left = Math.max(0, need - done);
-        parts.push(`${keyLabelForIngredient(ing)}=${ing.toUpperCase()} x${left}`);
-      }
-      ctx.fillText(`Remaining: ${parts.join("   ")}`, panelX + 18, controlsY);
-    } else if (step.type === "cook") {
-      ctx.fillText(`Stir: HOLD SPACE in GREEN (middle 20%). Serve is next step.`, panelX + 18, controlsY);
-      drawCookBar(step, canvas.height - 250);
-    } else if (step.type === "serve") {
-      ctx.fillText(`SERVE NOW: press ENTER`, panelX + 18, controlsY);
-    }
-  }
-
-  function drawTitle() {
-    titleTime += 0.05;
-    const bounce = Math.sin(titleTime) * 10;
-    ctx.fillStyle = "#ffe066";
-    ctx.font = "bold 70px Courier New";
-    ctx.textAlign = "center";
-    ctx.fillText("FRANTIC HERITAGE COOKING", canvas.width / 2, canvas.height / 2 - 120 + bounce);
-    ctx.font = "24px Courier New";
-  }
-  function drawGameOver() {
-    ctx.fillStyle = "#fff";
-    ctx.font = "bold 60px Courier New";
-    ctx.textAlign = "center";
-    ctx.fillText("TIME UP!", canvas.width / 2, canvas.height / 2);
   }
 
   /* ================= LOOP ================= */
@@ -851,17 +468,32 @@ function drawDishInfo() {
     }
 
     ctx.clearRect(0, 0, canvas.width, canvas.height);
-    drawBackground();
+    drawBackground(ctx, canvas, assets);
 
-    if (game.state === "menu") drawTitle();
-    if (game.state === "playing") {
-      drawDishInfo();
-      drawHeroAlert();
-      drawPlate();
-      drawComboFlames();
-      drawInstructions();
+    if (game.state === "menu") {
+      titleTime += 0.05;
+      drawTitle(ctx, canvas, titleTime);
     }
-    if (game.state === "gameover") drawGameOver();
+
+    if (game.state === "playing") {
+      drawDishInfo(ctx, canvas, game);
+      drawHeroAlert(ctx, canvas, alertState);
+
+      if (game.shake > 0) game.shake--;
+
+      drawPlate(ctx, canvas, game, assets);
+      drawComboFlames(ctx, canvas, game);
+
+      drawInstructions(ctx, canvas, game, {
+        currentStep,
+        getNeededForStep,
+        getDoneForStep,
+        keyLabelForIngredient
+      });
+    }
+
+    if (game.state === "gameover") drawGameOver(ctx, canvas);
+    if (game.state === "win") drawWin(ctx, canvas);
 
     requestAnimationFrame(loop);
   }
@@ -870,12 +502,14 @@ function drawDishInfo() {
   return {
     async onStartClick() {
       await ensureAudio();
+
       if (!assetsLoaded) {
         startBtn.textContent = "LOADING...";
         await loadAssets();
         assetsLoaded = true;
         startBtn.textContent = "START GAME";
       }
+
       startGame();
     },
     restart() {
