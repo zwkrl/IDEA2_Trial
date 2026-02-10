@@ -21,7 +21,7 @@ export function drawHeroAlert(ctx, canvas, alertState) {
 
   ctx.font = "bold 24px Courier New";
   ctx.textAlign = "center";
-  ctx.fillStyle = "#111";
+  ctx.fillStyle = "#111" ;
   ctx.fillText(alertState.text, canvas.width / 2, y + 36);
   ctx.restore();
 }
