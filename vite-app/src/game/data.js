@@ -2,14 +2,14 @@
 export const keyLabels = ["Q", "W", "E", "R"];
 
 export const ingredientPool = {
-  chicken: { sprite: "chicken" },
-  pork: { sprite: "pork" },
-  garlic: { sprite: "garlic" },
-  ginger: { sprite: "ginger" },
-  chili: { sprite: "chili" },
-  shrimp: { sprite: "shrimp" },
-  coconut: { sprite: "coconut" },
-  rice: { sprite: "rice" }
+  chicken: { sprite: "chicken", id: 101 },
+  pork: { sprite: "pork", id: 102 },
+  garlic: { sprite: "garlic", id: 201 },
+  ginger: { sprite: "ginger", id: 202 },
+  chili: { sprite: "chili", id: 203 },
+  shrimp: { sprite: "shrimp", id: 301 },
+  coconut: { sprite: "coconut", id: 302 },
+  rice: { sprite: "rice", id: 303 }
 };
 
 export const STIR_WIDTH = 0.40;  // 40%

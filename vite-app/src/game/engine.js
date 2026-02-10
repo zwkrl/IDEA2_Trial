@@ -1,6 +1,6 @@
 // src/game/engine.js
 import { ensureAudio, playBeep } from "./audio.js";
-import { dishes, keyLabels, PENALTY } from "./data.js";
+import { dishes, keyLabels, PENALTY, ingredientPool } from "./data.js";
 import {
   drawBackground,
   drawHeroAlert,
@@ -9,6 +9,9 @@ import {
   drawDishInfo,
   drawInstructions,
   drawTitle,
+  drawLanding,
+  drawScanScreen,
+  drawDishSelect,
   drawGameOver,
   drawWin
 } from "./render.js";
@@ -80,6 +83,19 @@ export function createGame({ canvas, startBtn, restartBtn, hud }) {
     shake: 0,
     dishCountdown: 0
   };
+
+  game.scan = {
+    dish: null,
+    ingredients: [],
+    statusByIng: {},
+    input: "",
+    inputColor: "rgba(255,255,255,0.35)",
+    message: "",
+    messageColor: "#d7d7d7",
+    messageT: 0
+  };
+
+  let dishOptions = [];
 
   let titleTime = 0;
   let timer = null;
@@ -159,8 +175,14 @@ export function createGame({ canvas, startBtn, restartBtn, hud }) {
     game.ingCounts = counts;
   }
 
-  function loadDish() {
-    game.currentDish = dishes[Math.floor(Math.random() * dishes.length)];
+  function pickDishOptions() {
+    const pool = [...dishes];
+    shuffle(pool);
+    dishOptions = pool.slice(0, 4);
+  }
+
+  function loadDish(selectedDish) {
+    game.currentDish = selectedDish || dishes[Math.floor(Math.random() * dishes.length)];
     game.sequence = [...game.currentDish.ingredients];
 
     game.keyMap = [...game.sequence];
@@ -172,6 +194,28 @@ export function createGame({ canvas, startBtn, restartBtn, hud }) {
 
     initDishCounts();
     startDishCountdown(3);
+  }
+
+  function resetScanState(selectedDish) {
+    const ingredients = [...(selectedDish?.ingredients || [])];
+    const statusByIng = {};
+    for (const ing of ingredients) statusByIng[ing] = "pending";
+
+    game.scan = {
+      dish: selectedDish || null,
+      ingredients,
+      statusByIng,
+      input: "",
+      inputColor: "rgba(255,255,255,0.35)",
+      message: "Enter ingredient ID",
+      messageColor: "#d7d7d7",
+      messageT: 0
+    };
+  }
+
+  function startScan(selectedDish) {
+    resetScanState(selectedDish);
+    game.state = "scan";
   }
 
   function currentStep() {
@@ -227,7 +271,26 @@ export function createGame({ canvas, startBtn, restartBtn, hud }) {
     }
   }
 
-  function startGame() {
+  function setScanFeedback(text, color, ttl = 0.8) {
+    game.scan.message = text;
+    game.scan.messageColor = color;
+    game.scan.inputColor = color;
+    game.scan.messageT = ttl;
+  }
+
+  function updateScanFeedback(dt) {
+    if (game.state !== "scan") return;
+    if (game.scan.messageT > 0) {
+      game.scan.messageT = Math.max(0, game.scan.messageT - dt);
+      if (game.scan.messageT === 0) {
+        game.scan.message = "Enter ingredient ID";
+        game.scan.messageColor = "#d7d7d7";
+        game.scan.inputColor = "rgba(255,255,255,0.35)";
+      }
+    }
+  }
+
+  function startGame(selectedDish) {
     game.uniqueDishesCompleted = new Set();
     game.dishesToWin = dishes.length;
 
@@ -239,7 +302,7 @@ export function createGame({ canvas, startBtn, restartBtn, hud }) {
     startBtn.style.display = "none";
     restartBtn.style.display = "block";
 
-    loadDish();
+    loadDish(selectedDish);
     updateHUD();
 
     if (timer) clearInterval(timer);
@@ -324,6 +387,60 @@ export function createGame({ canvas, startBtn, restartBtn, hud }) {
 
   /* ================= INPUT ================= */
   function onKeyDown(e) {
+    if (game.state === "scan") {
+      const key = String(e.key);
+
+      if (key === "Backspace") {
+        game.scan.input = game.scan.input.slice(0, -1);
+        return;
+      }
+
+      if (key === "Enter") {
+        const raw = game.scan.input.trim();
+        game.scan.input = "";
+
+        if (!raw) {
+          setScanFeedback("ENTER AN ID", "rgba(255, 224, 102, 0.95)", 0.6);
+          return;
+        }
+
+        const id = Number(raw);
+        const match = game.scan.ingredients.find((ing) => ingredientPool[ing]?.id === id);
+
+        if (!match) {
+          setScanFeedback("ID NOT FOUND", "rgba(255, 89, 94, 0.95)", 0.8);
+          return;
+        }
+
+        if (game.scan.statusByIng[match] === "correct") {
+          setScanFeedback("ALREADY SCANNED", "rgba(255, 89, 94, 0.95)", 0.8);
+          return;
+        }
+
+        game.scan.statusByIng[match] = "correct";
+        setScanFeedback(`${match.toUpperCase()} OK`, "rgba(128, 255, 114, 0.95)", 0.8);
+
+        const allDone = game.scan.ingredients.every((ing) => game.scan.statusByIng[ing] === "correct");
+        if (allDone) startGame(game.scan.dish);
+        return;
+      }
+
+      if (/^\d$/.test(key)) {
+        if (game.scan.input.length < 4) game.scan.input += key;
+      }
+
+      return;
+    }
+
+    if (game.state === "dish-select") {
+      const key = String(e.key).toUpperCase();
+      const idx = keyLabels.indexOf(key);
+      if (idx !== -1 && dishOptions[idx]) {
+        startScan(dishOptions[idx]);
+      }
+      return;
+    }
+
     if (game.state !== "playing") return;
 
     const key = String(e.key);
@@ -379,6 +496,38 @@ export function createGame({ canvas, startBtn, restartBtn, hud }) {
 
   document.addEventListener("keydown", onKeyDown);
   document.addEventListener("keyup", onKeyUp);
+
+  function onCanvasClick(e) {
+    if (game.state !== "dish-select") return;
+
+    const rect = canvas.getBoundingClientRect();
+    const scaleX = canvas.width / rect.width;
+    const scaleY = canvas.height / rect.height;
+    const x = (e.clientX - rect.left) * scaleX;
+    const y = (e.clientY - rect.top) * scaleY;
+
+    const count = Math.min(4, dishOptions.length);
+    if (count === 0) return;
+
+    const pad = 26;
+    const panelW = Math.min(1400, canvas.width - 80);
+    const cardW = (panelW - pad * (count - 1)) / count;
+    const cardH = 320;
+    const startX = (canvas.width - panelW) / 2;
+    const startY = canvas.height / 2 - 120;
+
+    for (let i = 0; i < count; i++) {
+      const cx = startX + i * (cardW + pad);
+      const cy = startY;
+      const inside = x >= cx && x <= cx + cardW && y >= cy && y <= cy + cardH;
+      if (inside && dishOptions[i]) {
+        startScan(dishOptions[i]);
+        return;
+      }
+    }
+  }
+
+  canvas.addEventListener("click", onCanvasClick);
 
   /* ================= COUNTDOWN UPDATE ================= */
   let dishCountdownAccum = 0;
@@ -467,12 +616,25 @@ export function createGame({ canvas, startBtn, restartBtn, hud }) {
       updateAlert(dt);
     }
 
+    if (game.state === "scan") {
+      updateScanFeedback(dt);
+    }
+
     ctx.clearRect(0, 0, canvas.width, canvas.height);
     drawBackground(ctx, canvas, assets);
 
     if (game.state === "menu") {
       titleTime += 0.05;
+      drawLanding(ctx, canvas, titleTime);
       drawTitle(ctx, canvas, titleTime);
+    }
+
+    if (game.state === "dish-select") {
+      drawDishSelect(ctx, canvas, dishOptions, keyLabels, assets);
+    }
+
+    if (game.state === "scan") {
+      drawScanScreen(ctx, canvas, game.scan, assets);
     }
 
     if (game.state === "playing") {
@@ -510,10 +672,16 @@ export function createGame({ canvas, startBtn, restartBtn, hud }) {
         startBtn.textContent = "START GAME";
       }
 
-      startGame();
+      pickDishOptions();
+      game.state = "dish-select";
+      startBtn.style.display = "none";
+      restartBtn.style.display = "none";
     },
     restart() {
-      startGame();
+      pickDishOptions();
+      game.state = "dish-select";
+      startBtn.style.display = "none";
+      restartBtn.style.display = "none";
     },
     loop
   };
