@@ -2,7 +2,56 @@
 import { ingredientPool } from "./data.js";
 
 export function drawBackground(ctx, canvas, assets) {
-  if (assets.bg) ctx.drawImage(assets.bg, 0, 0, canvas.width, canvas.height);
+  if (assets.bg) {
+    ctx.drawImage(assets.bg, 0, 0, canvas.width, canvas.height);
+    return;
+  }
+
+  const grad = ctx.createLinearGradient(0, 0, canvas.width, canvas.height);
+  grad.addColorStop(0, "#0b0d12");
+  grad.addColorStop(1, "#14253a");
+  ctx.fillStyle = grad;
+  ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+  ctx.save();
+  ctx.globalAlpha = 0.25;
+  ctx.fillStyle = "#1f3a5f";
+  for (let i = 0; i < 10; i++) {
+    const w = 120 + i * 30;
+    const h = 60 + i * 20;
+    ctx.fillRect(80 + i * 110, 60 + i * 22, w, h);
+  }
+  ctx.restore();
+}
+
+export function drawLanding(ctx, canvas, titleTime) {
+  const bounce = Math.sin(titleTime) * 8;
+
+  ctx.save();
+  ctx.textAlign = "center";
+
+  ctx.fillStyle = "rgba(0,0,0,0.55)";
+  const panelW = Math.min(980, canvas.width - 80);
+  const panelH = 240;
+  const panelX = (canvas.width - panelW) / 2;
+  const panelY = canvas.height / 2 - 200;
+  ctx.fillRect(panelX, panelY, panelW, panelH);
+  ctx.strokeStyle = "rgba(255,255,255,0.2)";
+  ctx.strokeRect(panelX, panelY, panelW, panelH);
+
+  /*ctx.fillStyle = "#ffe066";
+  ctx.font = "bold 64px Courier New";
+  ctx.fillText("FRANTIC HERITAGE COOKING", canvas.width / 2, canvas.height / 2 - 90 + bounce);*/
+
+  ctx.fillStyle = "#ffffff";
+  ctx.font = "20px Courier New";
+  ctx.fillText("Fast hands. Bold flavors. Press START GAME to begin.", canvas.width / 2, canvas.height / 2 - 30);
+
+  ctx.fillStyle = "#d7d7d7";
+  ctx.font = "18px Courier New";
+  ctx.fillText("You will pick a dish with Q W E R before the timer starts.", canvas.width / 2, canvas.height / 2 + 10);
+
+  ctx.restore();
 }
 
 export function drawHeroAlert(ctx, canvas, alertState) {
@@ -21,7 +70,7 @@ export function drawHeroAlert(ctx, canvas, alertState) {
 
   ctx.font = "bold 24px Courier New";
   ctx.textAlign = "center";
-  ctx.fillStyle = "#111";
+  ctx.fillStyle = "#111" ;
   ctx.fillText(alertState.text, canvas.width / 2, y + 36);
   ctx.restore();
 }
@@ -156,6 +205,151 @@ export function drawDishInfo(ctx, canvas, game) {
     ctx.font = "bold 18px Courier New";
     ctx.fillStyle = "rgba(255,255,255,0.92)";
     ctx.fillText(subtitle, cx, subtitleY);
+  }
+
+  ctx.restore();
+}
+
+export function drawDishSelect(ctx, canvas, options, keyLabels, assets) {
+  const count = Math.min(4, options.length);
+  if (count === 0) return;
+
+  const pad = 26;
+  const panelW = Math.min(1400, canvas.width - 80);
+  const cardW = (panelW - pad * (count - 1)) / count;
+  const cardH = 320;
+  const startX = (canvas.width - panelW) / 2;
+  const startY = canvas.height / 2 - 120;
+
+  ctx.save();
+  ctx.textAlign = "center";
+  ctx.fillStyle = "#ffe066";
+  ctx.font = "bold 36px Courier New";
+  ctx.fillText("CHOOSE YOUR DISH", canvas.width / 2, startY - 46);
+
+  ctx.fillStyle = "#d7d7d7";
+  ctx.font = "18px Courier New";
+  ctx.fillText("Press Q W E R", canvas.width / 2, startY - 16);
+
+  for (let i = 0; i < count; i++) {
+    const dish = options[i];
+    const x = startX + i * (cardW + pad);
+    const y = startY;
+
+    drawPanel(ctx, x, y, cardW, cardH, 0.7);
+
+    ctx.fillStyle = "#ffe066";
+    ctx.font = "bold 22px Courier New";
+    ctx.fillText(`${keyLabels[i]}`, x + cardW / 2, y + 34);
+
+    ctx.fillStyle = "#ffffff";
+    ctx.font = "bold 20px Courier New";
+    ctx.fillText(dish.name, x + cardW / 2, y + 80);
+
+    ctx.fillStyle = "#d7d7d7";
+    ctx.font = "16px Courier New";
+    ctx.fillText(dish.culture, x + cardW / 2, y + 108);
+
+    const iconSize = 60;
+    const iconPad = 10;
+    const rowY = y + 140;
+    const totalIcons = Math.min(4, dish.ingredients.length);
+    const iconsW = totalIcons * iconSize + (totalIcons - 1) * iconPad;
+    let iconX = x + (cardW - iconsW) / 2;
+
+    for (let k = 0; k < totalIcons; k++) {
+      const ing = dish.ingredients[k];
+      const img = assets[ingredientPool[ing]?.sprite];
+      if (img) ctx.drawImage(img, iconX, rowY, iconSize, iconSize);
+      iconX += iconSize + iconPad;
+    }
+
+    ctx.fillStyle = "#a7c7ff";
+    ctx.font = "14px Courier New";
+    ctx.fillText("Pick to start cooking", x + cardW / 2, y + cardH - 28);
+  }
+
+  ctx.restore();
+}
+
+export function drawScanScreen(ctx, canvas, scanState, assets) {
+  if (!scanState || !scanState.ingredients || scanState.ingredients.length === 0) return;
+
+  const ingredients = scanState.ingredients;
+  const count = ingredients.length;
+
+  const pad = 22;
+  const panelW = Math.min(1200, canvas.width - 100);
+  const cardW = Math.min(180, (panelW - pad * (count - 1)) / count);
+  const cardH = 210;
+  const startX = (canvas.width - (cardW * count + pad * (count - 1))) / 2;
+  const startY = canvas.height / 2 - 170;
+
+  ctx.save();
+  ctx.textAlign = "center";
+
+  ctx.fillStyle = "#ffe066";
+  ctx.font = "bold 36px Courier New";
+  ctx.fillText("SCAN THESE INGREDIENTS", canvas.width / 2, startY - 46);
+
+  ctx.fillStyle = "#d7d7d7";
+  ctx.font = "18px Courier New";
+  ctx.fillText("Type the ID and press ENTER", canvas.width / 2, startY - 16);
+
+  for (let i = 0; i < count; i++) {
+    const ing = ingredients[i];
+    const x = startX + i * (cardW + pad);
+    const y = startY;
+
+    const status = scanState.statusByIng?.[ing] || "pending";
+    const strokeColor = status === "correct"
+      ? "rgba(128, 255, 114, 0.95)"
+      : status === "wrong"
+        ? "rgba(255, 89, 94, 0.95)"
+        : "rgba(255,255,255,0.22)";
+
+    drawPanel(ctx, x, y, cardW, cardH, 0.68);
+    ctx.strokeStyle = strokeColor;
+    ctx.lineWidth = 3;
+    ctx.strokeRect(x + 3, y + 3, cardW - 6, cardH - 6);
+
+    const iconSize = Math.min(90, cardW - 40);
+    const img = assets[ingredientPool[ing]?.sprite];
+    if (img) {
+      ctx.drawImage(img, x + (cardW - iconSize) / 2, y + 26, iconSize, iconSize);
+    }
+
+    ctx.fillStyle = "#ffffff";
+    ctx.font = "bold 16px Courier New";
+    ctx.fillText(ing.toUpperCase(), x + cardW / 2, y + cardH - 46);
+
+    ctx.fillStyle = "#a7c7ff";
+    ctx.font = "14px Courier New";
+    const label = status === "correct" ? "OK" : status === "wrong" ? "WRONG" : "ID: ____";
+    ctx.fillText(label, x + cardW / 2, y + cardH - 22);
+  }
+
+  const inputY = startY + cardH + 30;
+  const inputW = 360;
+  const inputH = 54;
+  const inputX = (canvas.width - inputW) / 2;
+
+  ctx.fillStyle = "rgba(0,0,0,0.6)";
+  ctx.fillRect(inputX, inputY, inputW, inputH);
+
+  ctx.strokeStyle = scanState.inputColor || "rgba(255,255,255,0.35)";
+  ctx.lineWidth = 3;
+  ctx.strokeRect(inputX, inputY, inputW, inputH);
+
+  ctx.fillStyle = "#ffffff";
+  ctx.font = "bold 26px Courier New";
+  const inputText = scanState.input && scanState.input.length ? scanState.input : "";
+  ctx.fillText(inputText, canvas.width / 2, inputY + 36);
+
+  if (scanState.message) {
+    ctx.fillStyle = scanState.messageColor || "#ffffff";
+    ctx.font = "16px Courier New";
+    ctx.fillText(scanState.message, canvas.width / 2, inputY + 78);
   }
 
   ctx.restore();
