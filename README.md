@@ -2,6 +2,7 @@ This is a trial version of IDEA2 cooking game prototype.
 This project runs on Vite and requires Node.js to be installed (version 12.2.0 or higher) along with a package manager like npm, Yarn, pnpm, or Bun
 
 * Only use dev version when doing normal development, build once ready to deploy final vers or when testing prod vers
+* To bypass scanning page for testing, add /?test=true to end of localhost:port
 * feature/branch-name for new features
 * fix/branch-name for bug fixes
   

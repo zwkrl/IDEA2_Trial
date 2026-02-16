@@ -3,10 +3,9 @@ import { ensureAudio, playBeep } from "./audio.js";
 import { dishes, keyLabels, PENALTY, ingredientPool } from "./data.js";
 import {
   drawBackground,
-  drawHeroAlert,
-  drawPlate,
+  drawTopStack,
   drawComboFlames,
-  drawDishInfo,
+  drawPlate,
   drawInstructions,
   drawTitle,
   drawLanding,
@@ -17,13 +16,16 @@ import {
 } from "./render.js";
 
 export function createGame({ canvas, startBtn, restartBtn, hud }) {
-  /* ================= CANVAS ================= */
   const ctx = canvas.getContext("2d");
   ctx.imageSmoothingEnabled = false;
 
-  /* ================= ASSETS ================= */
-  const assets = {};
+  const QWER_CODES = ["KeyQ", "KeyW", "KeyE", "KeyR"];
 
+  // Testing bypass (?test=true) [web:58]
+  const urlParams = new URLSearchParams(window.location.search);
+  const testMode = urlParams.get("test") === "true";
+
+  const assets = {};
   function loadImage(key, src) {
     return new Promise((res) => {
       const img = new Image();
@@ -37,7 +39,6 @@ export function createGame({ canvas, startBtn, restartBtn, hud }) {
     await Promise.all([
       loadImage("bg", "/assets/background/kitchen.png"),
       loadImage("plate", "/assets/ui/plate.png"),
-
       loadImage("chicken", "/assets/ingredients/chicken.png"),
       loadImage("pork", "/assets/ingredients/pork.png"),
       loadImage("garlic", "/assets/ingredients/garlic.png"),
@@ -49,7 +50,6 @@ export function createGame({ canvas, startBtn, restartBtn, hud }) {
     ]);
   }
 
-  /* ================= GAME STATE ================= */
   const game = {
     state: "menu",
     score: 0,
@@ -62,23 +62,26 @@ export function createGame({ canvas, startBtn, restartBtn, hud }) {
     shakeOffsetX: 0,
     shakeOffsetY: 0,
     shakeSampleT: 0,
-    shakeHz: 1, // lower = slower vibration
+    shakeHz: 1,
 
     currentDish: null,
-
     sequence: [],
     keyMap: [],
 
     steps: [],
     stepIndex: 0,
-
     stepProgress: 0,
 
     ingCounts: {},
+    plateIcons: [], // array of { ing, t }
 
-    spaceHeld: false,
-    stirredThisStep: false,
-    missedStirThisStep: false,
+    // Cook combo state (existing system)
+    cookSeq: [],
+    cookSeqIndex: 0,
+    cookIconsDone: [],
+    cookIconJitter: [],
+    cookCombosDone: 0,
+    cookCombosNeed: 2,
 
     shake: 0,
     dishCountdown: 0
@@ -96,13 +99,11 @@ export function createGame({ canvas, startBtn, restartBtn, hud }) {
   };
 
   let dishOptions = [];
-
   let titleTime = 0;
   let timer = null;
   let assetsLoaded = false;
   let lastFrameTs = null;
 
-  /* ================= HERO ALERTS ================= */
   const alertState = { text: "", color: "rgba(255,255,255,0)", ttl: 0 };
 
   function setAlert(text, color, ttl = 0.85) {
@@ -110,18 +111,17 @@ export function createGame({ canvas, startBtn, restartBtn, hud }) {
     alertState.color = color;
     alertState.ttl = ttl;
   }
+
   function updateAlert(dt) {
     if (alertState.ttl > 0) alertState.ttl = Math.max(0, alertState.ttl - dt);
   }
 
-  /* ================= HUD ================= */
   function updateHUD() {
     hud.scoreEl.textContent = game.score;
     hud.comboEl.textContent = game.combo + "x";
     hud.timeEl.textContent = game.time;
   }
 
-  /* ================= PENALTIES ================= */
   function applyPenalty(kind = "wrongInput") {
     let scoreLoss = PENALTY.wrongInputScore;
     let timeLoss = PENALTY.wrongInputTime;
@@ -140,7 +140,6 @@ export function createGame({ canvas, startBtn, restartBtn, hud }) {
     updateHUD();
   }
 
-  /* ================= FLOW ================= */
   function shuffle(array) {
     for (let i = array.length - 1; i > 0; i--) {
       const j = Math.floor(Math.random() * (i + 1));
@@ -148,11 +147,16 @@ export function createGame({ canvas, startBtn, restartBtn, hud }) {
     }
   }
 
+  function resetCookIcons() {
+    game.cookSeq = [];
+    game.cookSeqIndex = 0;
+    game.cookIconsDone = [];
+    game.cookIconJitter = [];
+  }
+
   function resetStepState() {
     game.stepProgress = 0;
-    game.stirredThisStep = false;
-    game.missedStirThisStep = false;
-    game.spaceHeld = false;
+    resetCookIcons();
   }
 
   function startDishCountdown(seconds = 3) {
@@ -183,6 +187,7 @@ export function createGame({ canvas, startBtn, restartBtn, hud }) {
 
   function loadDish(selectedDish) {
     game.currentDish = selectedDish || dishes[Math.floor(Math.random() * dishes.length)];
+    game.plateIcons = [];
     game.sequence = [...game.currentDish.ingredients];
 
     game.keyMap = [...game.sequence];
@@ -191,6 +196,7 @@ export function createGame({ canvas, startBtn, restartBtn, hud }) {
     game.steps = (game.currentDish.steps || []).map(s => ({ ...s }));
     game.stepIndex = 0;
     resetStepState();
+    game.cookCombosDone = 0;
 
     initDishCounts();
     startDishCountdown(3);
@@ -207,7 +213,6 @@ export function createGame({ canvas, startBtn, restartBtn, hud }) {
       statusByIng,
       input: "",
       inputColor: "rgba(255,255,255,0.35)",
-      message: "Enter ingredient ID",
       messageColor: "#d7d7d7",
       messageT: 0
     };
@@ -244,7 +249,6 @@ export function createGame({ canvas, startBtn, restartBtn, hud }) {
       startBtn.textContent = "PLAY AGAIN";
       startBtn.style.display = "block";
       restartBtn.style.display = "none";
-
       updateHUD();
       return;
     }
@@ -252,6 +256,26 @@ export function createGame({ canvas, startBtn, restartBtn, hud }) {
     setAlert("DISH COMPLETE!", "rgba(128, 255, 114, 0.92)", 0.9);
     loadDish();
     updateHUD();
+  }
+
+  function generateCookSeq() {
+    const len = Math.max(4, Math.min(6, 4 + Math.floor(game.cookCombosDone / 1)));
+    const seq = [];
+    for (let i = 0; i < len; i++) seq.push(QWER_CODES[Math.floor(Math.random() * QWER_CODES.length)]);
+    return seq;
+  }
+
+  function ensureCookSeqReady(step) {
+    if (!step || step.type !== "cook") return;
+    if (game.cookSeq.length > 0) return;
+
+    const seq = generateCookSeq();
+    game.cookSeq = seq;
+    game.cookSeqIndex = 0;
+    game.cookIconsDone = seq.map(() => false);
+    game.cookIconJitter = seq.map(() => 0);
+
+    setAlert("COOK: match the icons (QWER)", "rgba(255, 224, 102, 0.95)", 0.9);
   }
 
   function advanceStep() {
@@ -265,8 +289,8 @@ export function createGame({ canvas, startBtn, restartBtn, hud }) {
 
     const step = currentStep();
     if (step) {
-      if (step.type === "serve") setAlert("SERVE NOW: ENTER", "rgba(128, 255, 114, 0.92)", 0.9);
-      else if (step.type === "cook") setAlert("COOKING...", "rgba(255, 224, 102, 0.90)", 0.75);
+      if (step.type === "serve") setAlert("SERVE: press W", "rgba(128, 255, 114, 0.92)", 0.9);
+      else if (step.type === "cook") setAlert("COOK: match the icons (QWER)", "rgba(255, 224, 102, 0.90)", 0.9);
       else setAlert(`NEXT: ${step.label}`, "rgba(255, 224, 102, 0.90)", 0.9);
     }
   }
@@ -283,7 +307,6 @@ export function createGame({ canvas, startBtn, restartBtn, hud }) {
     if (game.scan.messageT > 0) {
       game.scan.messageT = Math.max(0, game.scan.messageT - dt);
       if (game.scan.messageT === 0) {
-        game.scan.message = "Enter ingredient ID";
         game.scan.messageColor = "#d7d7d7";
         game.scan.inputColor = "rgba(255,255,255,0.35)";
       }
@@ -314,23 +337,26 @@ export function createGame({ canvas, startBtn, restartBtn, hud }) {
     }, 1000);
   }
 
-  /* ================= COUNT HELPERS ================= */
   function getNeededForStep(step, ing) {
     if (!step) return 0;
     if (step.counts && step.counts[ing] != null) return Math.max(0, Number(step.counts[ing]) || 0);
     return 0;
   }
+
   function getDoneForStep(step, ing) {
     if (!step || !step._doneCounts) return 0;
     return Math.max(0, Number(step._doneCounts[ing]) || 0);
   }
+
   function incDoneForStep(step, ing) {
     if (!step._doneCounts) step._doneCounts = {};
     step._doneCounts[ing] = (step._doneCounts[ing] || 0) + 1;
 
     if (!game.ingCounts[ing]) game.ingCounts[ing] = { done: 0, need: 0 };
-    game.ingCounts[ing].done = Math.min(game.ingCounts[ing].need || Infinity, (game.ingCounts[ing].done || 0) + 1);
+    const need = game.ingCounts[ing].need;
+    game.ingCounts[ing].done = Math.min(need || Infinity, (game.ingCounts[ing].done || 0) + 1);
   }
+
   function stepIsComplete(step) {
     if (!step) return false;
     if (step.type !== "prep" && step.type !== "action") return false;
@@ -343,49 +369,92 @@ export function createGame({ canvas, startBtn, restartBtn, hud }) {
     return true;
   }
 
-  /* ================= INPUT HELPERS ================= */
   function ingredientForKeyIndex(index) {
     return game.keyMap[index];
   }
+
   function keyLabelForIngredient(ing) {
     const idx = game.keyMap.indexOf(ing);
     return idx >= 0 ? keyLabels[idx] : "?";
   }
 
-  function handlePrepOrActionPress(pressedIngredient) {
-    const step = currentStep();
-    if (!step) return;
+function handlePrepOrActionPress(pressedIngredient) {
+  const step = currentStep();
+  if (!step) return;
 
-    const allowed = step.uses || [];
-    if (allowed.length > 0 && !allowed.includes(pressedIngredient)) {
-      applyPenalty("wrongInput");
-      return;
-    }
+  const allowed = step.uses || [];
+  if (allowed.length > 0 && !allowed.includes(pressedIngredient)) {
+    applyPenalty("wrongInput");
+    return;
+  }
 
-    const need = getNeededForStep(step, pressedIngredient);
-    if (need <= 0) {
-      applyPenalty("wrongInput");
-      return;
-    }
+  const need = getNeededForStep(step, pressedIngredient);
+  if (need <= 0) {
+    applyPenalty("wrongInput");
+    return;
+  }
 
-    const done = getDoneForStep(step, pressedIngredient);
-    if (done >= need) {
-      applyPenalty("wrongInput");
-      setAlert("TOO MANY OF THAT INGREDIENT", "rgba(255, 89, 94, 0.92)", 0.8);
-      return;
-    }
+  const done = getDoneForStep(step, pressedIngredient);
+  if (done >= need) {
+    applyPenalty("wrongInput");
+    setAlert("TOO MANY OF THAT INGREDIENT", "rgba(255, 89, 94, 0.92)", 0.8);
+    return;
+  }
 
-    incDoneForStep(step, pressedIngredient);
-    awardStepPoints(step.type === "prep" ? 0.40 : 0.55);
+  // SUCCESS: count it
+  incDoneForStep(step, pressedIngredient);
 
-    if (stepIsComplete(step)) {
-      setAlert("STEP COMPLETE!", "rgba(128, 255, 114, 0.92)", 0.7);
-      awardStepPoints(1.1);
-      advanceStep();
+  // ENHANCEMENT: also place icon on plate
+  if (!Array.isArray(game.plateIcons)) game.plateIcons = [];
+  game.plateIcons.push({ ing: pressedIngredient, t: performance.now() }); // [web:224]
+  if (game.plateIcons.length > 24) game.plateIcons.shift();
+
+  awardStepPoints(step.type === "prep" ? 0.40 : 0.55);
+
+  if (stepIsComplete(step)) {
+    setAlert("STEP COMPLETE!", "rgba(128, 255, 114, 0.92)", 0.7);
+    awardStepPoints(1.1);
+    advanceStep();
+  }
+}
+
+
+  function triggerCookIconJitter(i) {
+    if (!Array.isArray(game.cookIconJitter)) return;
+    if (i < 0 || i >= game.cookIconJitter.length) return;
+    game.cookIconJitter[i] = 0.25;
+  }
+
+  function handleCookKey(code, step) {
+    ensureCookSeqReady(step);
+
+    const expected = game.cookSeq[game.cookSeqIndex];
+    if (!expected) return;
+
+    if (code === expected) {
+      game.cookIconsDone[game.cookSeqIndex] = true;
+      game.cookSeqIndex++;
+      playBeep(660, 0.05);
+
+      if (game.cookSeqIndex >= game.cookSeq.length) {
+        game.cookCombosDone++;
+        awardStepPoints(1.15);
+        setAlert("COOK COMBO COMPLETE!", "rgba(128, 255, 114, 0.92)", 0.7);
+
+        const chunk = 1 / Math.max(1, game.cookCombosNeed);
+        game.stepProgress = Math.min(1, game.stepProgress + chunk);
+
+        resetCookIcons();
+        ensureCookSeqReady(step);
+      }
+    } else {
+      triggerCookIconJitter(game.cookSeqIndex);
+      applyPenalty("wrongStir");
+      game.cookSeqIndex = 0;
+      game.cookIconsDone = game.cookIconsDone.map(() => false);
     }
   }
 
-  /* ================= INPUT ================= */
   function onKeyDown(e) {
     if (game.state === "scan") {
       const key = String(e.key);
@@ -428,74 +497,53 @@ export function createGame({ canvas, startBtn, restartBtn, hud }) {
       if (/^\d$/.test(key)) {
         if (game.scan.input.length < 4) game.scan.input += key;
       }
-
       return;
     }
 
     if (game.state === "dish-select") {
       const key = String(e.key).toUpperCase();
       const idx = keyLabels.indexOf(key);
-      if (idx !== -1 && dishOptions[idx]) {
-        startScan(dishOptions[idx]);
-      }
+      if (idx !== -1 && dishOptions[idx]) startScan(dishOptions[idx]);
       return;
     }
 
     if (game.state !== "playing") return;
-
-    const key = String(e.key);
-    const isSpace = (key === " " || key === "Spacebar");
-    const isEnter = (key === "Enter");
-
-    if (isSpace) game.spaceHeld = true;
     if (game.dishCountdown > 0) return;
-    if (e.repeat && !isSpace) return;
+    if (e.repeat) return;
 
+    const code = e.code;
     const step = currentStep();
     if (!step) return;
 
+    const qwerIndex = QWER_CODES.indexOf(code);
+    if (qwerIndex === -1) return;
+
+    e.preventDefault();
+
     if (step.type === "serve") {
-      if (isEnter) {
+      if (code === "KeyW") {
         awardStepPoints(1.0);
         setAlert("SERVED!", "rgba(128, 255, 114, 0.92)", 0.55);
         advanceStep();
       } else {
         applyPenalty("wrongEnter");
-        setAlert("PRESS ENTER TO SERVE", "rgba(255, 89, 94, 0.92)", 0.75);
+        setAlert("SERVE = W", "rgba(255, 89, 94, 0.92)", 0.75);
       }
       return;
     }
 
     if (step.type === "cook") {
-      if (isEnter) {
-        applyPenalty("wrongEnter");
-        setAlert("NO ENTER — SERVE LATER", "rgba(255, 89, 94, 0.92)", 0.7);
-        return;
-      }
-
-      const idx = keyLabels.indexOf(String(key).toUpperCase());
-      if (idx !== -1) {
-        applyPenalty("wrongInput");
-        setAlert("COOKING... NO INGREDIENTS", "rgba(255, 89, 94, 0.92)", 0.75);
-      }
+      handleCookKey(code, step);
       return;
     }
 
-    const index = keyLabels.indexOf(String(key).toUpperCase());
-    if (index === -1) return;
-
-    const pressedIngredient = ingredientForKeyIndex(index);
-    if (step.type === "prep" || step.type === "action") handlePrepOrActionPress(pressedIngredient);
-  }
-
-  function onKeyUp(e) {
-    const key = String(e.key);
-    const isSpace = (key === " " || key === "Spacebar");
-    if (isSpace) game.spaceHeld = false;
+    if (step.type === "prep" || step.type === "action") {
+      const pressedIngredient = ingredientForKeyIndex(qwerIndex);
+      handlePrepOrActionPress(pressedIngredient);
+    }
   }
 
   document.addEventListener("keydown", onKeyDown);
-  document.addEventListener("keyup", onKeyUp);
 
   function onCanvasClick(e) {
     if (game.state !== "dish-select") return;
@@ -529,9 +577,7 @@ export function createGame({ canvas, startBtn, restartBtn, hud }) {
 
   canvas.addEventListener("click", onCanvasClick);
 
-  /* ================= COUNTDOWN UPDATE ================= */
   let dishCountdownAccum = 0;
-
   function updateDishCountdown(dt) {
     if (game.dishCountdown <= 0) return;
     dishCountdownAccum += dt;
@@ -550,37 +596,22 @@ export function createGame({ canvas, startBtn, restartBtn, hud }) {
     }
   }
 
-  /* ================= COOK UPDATE ================= */
   function updateCookStep(dt) {
     const step = currentStep();
     if (!step || step.type !== "cook") return;
 
+    ensureCookSeqReady(step);
+
+    for (let i = 0; i < game.cookIconJitter.length; i++) {
+      if (game.cookIconJitter[i] > 0) game.cookIconJitter[i] = Math.max(0, game.cookIconJitter[i] - dt);
+    }
+
     const denom = Math.max(0.2, step.time || 1);
     game.stepProgress += dt / denom;
 
-    const win = step.stirPerfectWindow;
-    if (win) {
-      const p = game.stepProgress;
-      const inside = (p >= win[0] && p <= win[1]);
-
-      if (!game.stirredThisStep && game.spaceHeld && inside) {
-        game.stirredThisStep = true;
-        awardStepPoints(1.2);
-        playBeep(660);
-        setAlert("PERFECT STIR!", "rgba(128, 255, 114, 0.92)", 0.5);
-      }
-
-      if (!game.stirredThisStep && !game.missedStirThisStep && p > win[1]) {
-        game.missedStirThisStep = true;
-        applyPenalty("wrongStir");
-        setAlert("MISSED STIR!", "rgba(255, 89, 94, 0.92)", 0.7);
-      }
-    } else {
-      if (game.spaceHeld && game.stepProgress < 1) {
-        applyPenalty("wrongStir");
-        setAlert("NO STIR NEEDED", "rgba(255, 89, 94, 0.92)", 0.55);
-        game.spaceHeld = false;
-      }
+    if (game.stepProgress >= 1 && game.cookCombosDone < game.cookCombosNeed) {
+      applyPenalty("wrongStir");
+      setAlert("COOK FAILED!", "rgba(255, 89, 94, 0.92)", 0.8);
     }
 
     if (game.stepProgress >= 1) {
@@ -589,7 +620,6 @@ export function createGame({ canvas, startBtn, restartBtn, hud }) {
     }
   }
 
-  /* ================= SHAKE UPDATE ================= */
   function updateShake(dt) {
     if (game.shake > 0) game.shake = Math.max(0, game.shake - 0.8);
 
@@ -603,7 +633,6 @@ export function createGame({ canvas, startBtn, restartBtn, hud }) {
     }
   }
 
-  /* ================= LOOP ================= */
   function loop(ts) {
     if (lastFrameTs == null) lastFrameTs = ts;
     const dt = Math.min(0.05, (ts - lastFrameTs) / 1000);
@@ -616,9 +645,7 @@ export function createGame({ canvas, startBtn, restartBtn, hud }) {
       updateAlert(dt);
     }
 
-    if (game.state === "scan") {
-      updateScanFeedback(dt);
-    }
+    if (game.state === "scan") updateScanFeedback(dt);
 
     ctx.clearRect(0, 0, canvas.width, canvas.height);
     drawBackground(ctx, canvas, assets);
@@ -638,19 +665,21 @@ export function createGame({ canvas, startBtn, restartBtn, hud }) {
     }
 
     if (game.state === "playing") {
-      drawDishInfo(ctx, canvas, game);
-      drawHeroAlert(ctx, canvas, alertState);
+      const uiBottomY = drawTopStack(ctx, canvas, game, alertState);
+
+      let y = uiBottomY;
+      y += drawComboFlames(ctx, canvas, game, y) + 10;
 
       if (game.shake > 0) game.shake--;
 
-      drawPlate(ctx, canvas, game, assets);
-      drawComboFlames(ctx, canvas, game);
+      drawPlate(ctx, canvas, game, assets, y);
 
       drawInstructions(ctx, canvas, game, {
         currentStep,
         getNeededForStep,
         getDoneForStep,
-        keyLabelForIngredient
+        keyLabelForIngredient,
+        assets
       });
     }
 
@@ -660,16 +689,19 @@ export function createGame({ canvas, startBtn, restartBtn, hud }) {
     requestAnimationFrame(loop);
   }
 
-  /* ================= PUBLIC API ================= */
   return {
     async onStartClick() {
       await ensureAudio();
-
       if (!assetsLoaded) {
         startBtn.textContent = "LOADING...";
         await loadAssets();
         assetsLoaded = true;
         startBtn.textContent = "START GAME";
+      }
+
+      if (testMode) {
+        startGame();
+        return;
       }
 
       pickDishOptions();
@@ -678,6 +710,11 @@ export function createGame({ canvas, startBtn, restartBtn, hud }) {
       restartBtn.style.display = "none";
     },
     restart() {
+      if (testMode) {
+        startGame();
+        return;
+      }
+
       pickDishOptions();
       game.state = "dish-select";
       startBtn.style.display = "none";
