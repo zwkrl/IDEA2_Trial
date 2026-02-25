@@ -41,16 +41,45 @@ export const dishes = [
     ingredients: ["chicken", "garlic", "ginger", "chili"],
     steps: [
       {
-        type: "prep",
-        label: "Blend rempah (hit the right keys)",
-        uses: ["garlic", "ginger", "chili"],
-        counts: { garlic: 3, ginger: 3, chili: 4 }
+        type: "combo",
+        process: "Process 1: Smash & Prep Keluak",
+        label: "Hit random 8-beat chop/mash combos (QWER). Fast rhythm = smooth paste.",
+        comboMode: "smash",
+        targetBeats: 8,
+        time: 10,
+        beatWindow: 0.38,
+        perfectPowerUp: true
       },
-      { type: "cook", label: "Fry rempah", time: 4.0, stirPerfectWindow: STIR_PERFECT },
-      { type: "serve", label: "Serve: press ENTER" },
-      { type: "action", label: "Coat chicken", uses: ["chicken"], counts: { chicken: 3 } },
-      { type: "cook", label: "Simmer until tender ", time: 4.0, stirPerfectWindow: STIR_PERFECT },
-      { type: "serve", label: "Serve: press ENTER" }
+      {
+        type: "combo",
+        process: "Process 2: Sizzle & Fry",
+        label: "Follow alternating rhythm W-E-R-Q. Build aroma; wrong hits create smoke.",
+        comboMode: "sizzle",
+        basePattern: ["KeyW", "KeyE", "KeyR", "KeyQ"],
+        targetBeats: 12,
+        time: 12,
+        rhythmWindow: 0.34
+      },
+      {
+        type: "combo",
+        process: "Process 3: Stir & Cook Chicken",
+        label: "Rapid combos + random cue hits for juicy chicken. Misses can burn the pan.",
+        comboMode: "stir",
+        targetBeats: 14,
+        time: 14,
+        cueEvery: 4,
+        cueWindow: 1.0
+      },
+      {
+        type: "combo",
+        process: "Process 4: Plate & Garnish",
+        label: "Complete the plating chain in rhythm. Perfect garnish timing gives flair bonus.",
+        comboMode: "plate",
+        targetBeats: 10,
+        time: 11,
+        rhythmWindow: 0.3,
+        allowMasterChef: true
+      }
     ]
   },
   {

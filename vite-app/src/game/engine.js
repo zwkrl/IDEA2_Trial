@@ -6,13 +6,22 @@ import {
   drawTopStack,
   drawComboFlames,
   drawPlate,
+  drawProcessOverlay,
   drawInstructions,
   drawTitle,
   drawLanding,
   drawScanScreen,
   drawDishSelect,
   drawGameOver,
-  drawWin
+  drawWin,
+  drawStep1Intro,
+  drawStep1Gameplay,
+  drawStep2Intro,
+  drawStep2Gameplay,
+  drawStep3Intro,
+  drawStep3Gameplay,
+  drawStep4Intro,
+  drawStep4Gameplay
 } from "./render.js";
 
 export function createGame({ canvas, startBtn, restartBtn, hud }) {
@@ -26,6 +35,14 @@ export function createGame({ canvas, startBtn, restartBtn, hud }) {
   const testMode = urlParams.get("test") === "true";
 
   const assets = {};
+  function slugifyDishName(name) {
+    return String(name || "")
+      .toLowerCase()
+      .trim()
+      .replace(/[^a-z0-9]+/g, "-")
+      .replace(/^-+|-+$/g, "");
+  }
+
   function loadImage(key, src) {
     return new Promise((res) => {
       const img = new Image();
@@ -35,8 +52,16 @@ export function createGame({ canvas, startBtn, restartBtn, hud }) {
     });
   }
 
+  async function loadImageVariants(key, sources) {
+    for (const src of sources) {
+      const ok = await loadImage(key, src);
+      if (ok) return true;
+    }
+    return false;
+  }
+
   async function loadAssets() {
-    await Promise.all([
+    const baseLoads = [
       loadImage("bg", "/assets/background/kitchen.png"),
       loadImage("plate", "/assets/ui/plate.png"),
       loadImage("chicken", "/assets/ingredients/chicken.png"),
@@ -46,8 +71,88 @@ export function createGame({ canvas, startBtn, restartBtn, hud }) {
       loadImage("chili", "/assets/ingredients/chili.png"),
       loadImage("shrimp", "/assets/ingredients/shrimp.png"),
       loadImage("coconut", "/assets/ingredients/coconut.png"),
-      loadImage("rice", "/assets/ingredients/rice.png")
-    ]);
+      loadImage("rice", "/assets/ingredients/rice.png"),
+      loadImageVariants("smash_pestle", [
+        "/assets/process1/pestle.png",
+        "/assets/process1/pestle (1).png"
+      ]),
+      loadImageVariants("smash_shell", [
+        "/assets/process1/keluak_shell.png",
+        "/assets/process1/keluak_shell (1).png"
+      ]),
+      loadImageVariants("smash_board", [
+        "/assets/process1/cutting_board.png",
+        "/assets/process1/cutting_board (1).png"
+      ]),
+      loadImageVariants("smash_crack_1", [
+        "/assets/process1/keluak_crack_1.png",
+        "/assets/process1/keluak_crack_1 (1).png"
+      ]),
+      loadImageVariants("smash_crack_2", [
+        "/assets/process1/keluak_crack_2.png",
+        "/assets/process1/keluak_crack_2 (1).png"
+      ]),
+      loadImageVariants("smash_splat_1", [
+        "/assets/process1/paste_splat_1.png",
+        "/assets/process1/paste_splat_1 (1).png"
+      ]),
+      loadImageVariants("smash_splat_2", [
+        "/assets/process1/paste_splat_2.png",
+        "/assets/process1/paste_splat_2 (1).png"
+      ]),
+      loadImageVariants("smash_garlic_fx", [
+        "/assets/process1/garlic_slice_fx.png",
+        "/assets/process1/garlic_slice_fx (1).png"
+      ]),
+      loadImageVariants("smash_chili_fx", [
+        "/assets/process1/chili_piece_fx.png",
+        "/assets/process1/chili_piece_fx (1).png"
+      ]),
+      loadImageVariants("smash_impact", [
+        "/assets/process1/impact_star.png",
+        "/assets/process1/impact_star (1).png"
+      ]),
+      loadImageVariants("scoop_spoon_empty", [
+        "/assets/process1/scoop_spoon_empty.png",
+        "/assets/process1/scoop_stage_1.png",
+        "/assets/process1/scoop_spoon.png",
+        "/assets/process1/spoon_empty.png",
+        "/assets/process1/spoon.png"
+      ]),
+      loadImageVariants("scoop_spoon_half", [
+        "/assets/process1/scoop_stage_2.png",
+        "/assets/process1/scoop_spoon_half.png"
+      ]),
+      loadImageVariants("scoop_spoon_full", [
+        "/assets/process1/scoop_spoon_full.png",
+        "/assets/process1/scoop_stage_3.png",
+        "/assets/process1/spoon_full.png"
+      ]),
+      loadImageVariants("step2_pot", [
+        "/assets/process2/POT (3).png",
+        "/assets/process2/pot.png",
+        "/assets/process2/pot (1).png"
+      ]),
+      loadImageVariants("step2_pot_paste", [
+        "/assets/process2/pot_paste.png",
+        "/assets/process2/pot paste.png"
+      ]),
+      loadImageVariants("step2_pot_finished", [
+        "/assets/process2/pot_finished.png",
+        "/assets/process2/pot finished.png"
+      ]),
+      loadImageVariants("step4_serve", [
+        "/assets/process2/serve.png",
+        "/assets/process2/serve (1).png"
+      ])
+    ];
+
+    const dishLoads = dishes.map((dish) => {
+      const slug = slugifyDishName(dish.name);
+      return loadImage(`dish_${slug}`, `/assets/dishes/${slug}.png`);
+    });
+
+    await Promise.all([...baseLoads, ...dishLoads]);
   }
 
   const game = {
@@ -82,6 +187,115 @@ export function createGame({ canvas, startBtn, restartBtn, hud }) {
     cookIconJitter: [],
     cookCombosDone: 0,
     cookCombosNeed: 2,
+
+    flavorMeter: 0,
+    processMini: {
+      active: false,
+      mode: "",
+      processName: "",
+      seq: [],
+      index: 0,
+      beats: 0,
+      target: 0,
+      streak: 0,
+      bestStreak: 0,
+      timeLeft: 0,
+      beatWindow: 0.35,
+      lastHitAt: 0,
+      smooth: 0,
+      aroma: 0,
+      smoke: 0,
+      spill: 0,
+      burn: 0,
+      cueCode: null,
+      cueT: 0,
+      cueEvery: 0,
+      cueWindow: 1,
+      secretCombo: ["KeyQ", "KeyR", "KeyE", "KeyW", "KeyQ", "KeyE"],
+      secretIndex: 0,
+      masterChef: false,
+      flairBonus: false,
+      perfectPower: false,
+      effectText: "",
+      effectT: 0,
+      smashPulse: 0,
+      smashCrack: 0,
+      smashParticles: []
+    },
+
+    step1: {
+      active: false,
+      intro: false,
+      introTimer: 0,
+      animT: 0,
+      smashPulse: 0,
+      lastSmashAt: 0,
+      phase: "lying",
+      scoopStage: 0,
+      scoopNeed: 2,
+      scoopHold: 0,
+      scoopFill: 0,
+      scoopHolding: false,
+      smashCount: 0,
+      smashNeed: 14,
+      poundCount: 0,
+      poundNeed: 18,
+      progress: 0,
+      smashProgress: 0,
+      poundProgress: 0,
+      showProgress: false,
+      placedOnPlate: false
+    },
+
+    step2: {
+      active: false,
+      intro: false,
+      introTimer: 0,
+      animT: 0,
+      phase: "addPaste",
+      addedPaste: false,
+      addedChicken: false,
+      comboSeq: [],
+      comboIndex: 0,
+      comboLen: 5,
+      transitionT: 0,
+      boilTimer: 5,
+      boilDuration: 5
+    },
+
+    step3Intro: {
+      active: false,
+      timer: 0,
+      animT: 0
+    },
+
+    step3: {
+      active: false,
+      pointer: 0.5,
+      sweetMin: 0.42,
+      sweetMax: 0.58,
+      finishAnim: false,
+      finishTimer: 0,
+      stirPhase: 0
+    },
+
+    step4Intro: {
+      active: false,
+      timer: 0,
+      animT: 0
+    },
+
+    step4: {
+      active: false,
+      phase: "timing",
+      pointer: 0.5,
+      pointerDir: 1,
+      sweetMin: 0.44,
+      sweetMax: 0.58,
+      animT: 0,
+      phaseT: 0,
+      finalT: 0
+    },
 
     shake: 0,
     dishCountdown: 0
@@ -154,9 +368,46 @@ export function createGame({ canvas, startBtn, restartBtn, hud }) {
     game.cookIconJitter = [];
   }
 
+  function resetProcessMini() {
+    game.processMini = {
+      active: false,
+      mode: "",
+      processName: "",
+      seq: [],
+      index: 0,
+      beats: 0,
+      target: 0,
+      streak: 0,
+      bestStreak: 0,
+      timeLeft: 0,
+      beatWindow: 0.35,
+      lastHitAt: 0,
+      smooth: 0,
+      aroma: 0,
+      smoke: 0,
+      spill: 0,
+      burn: 0,
+      cueCode: null,
+      cueT: 0,
+      cueEvery: 0,
+      cueWindow: 1,
+      secretCombo: ["KeyQ", "KeyR", "KeyE", "KeyW", "KeyQ", "KeyE"],
+      secretIndex: 0,
+      masterChef: false,
+      flairBonus: false,
+      perfectPower: false,
+      effectText: "",
+      effectT: 0,
+      smashPulse: 0,
+      smashCrack: 0,
+      smashParticles: []
+    };
+  }
+
   function resetStepState() {
     game.stepProgress = 0;
     resetCookIcons();
+    resetProcessMini();
   }
 
   function startDishCountdown(seconds = 3) {
@@ -197,9 +448,530 @@ export function createGame({ canvas, startBtn, restartBtn, hud }) {
     game.stepIndex = 0;
     resetStepState();
     game.cookCombosDone = 0;
+    game.flavorMeter = 0;
 
     initDishCounts();
-    startDishCountdown(3);
+
+    if (shouldRunStep1Flow()) {
+      startStep1Flow();
+    } else {
+      startDishCountdown(3);
+    }
+  }
+
+  function shouldRunStep1Flow() {
+    return game.currentDish?.name === "AYAM BUAH KELUAK" && game.stepIndex === 0;
+  }
+
+  function shouldRunStep2Flow() {
+    return game.currentDish?.name === "AYAM BUAH KELUAK" && game.stepIndex === 1;
+  }
+
+  function shouldRunStep3IntroFlow() {
+    return game.currentDish?.name === "AYAM BUAH KELUAK" && game.stepIndex === 2;
+  }
+
+  function shouldRunStep4IntroFlow() {
+    return game.currentDish?.name === "AYAM BUAH KELUAK" && game.stepIndex === 3;
+  }
+
+  function shouldRunStep3GameplayFlow() {
+    const step = currentStep();
+    return game.currentDish?.name === "AYAM BUAH KELUAK"
+      && game.stepIndex === 2
+      && !!step
+      && step.type === "combo"
+      && String(step.comboMode || "") === "stir";
+  }
+
+  function shouldRunStep4GameplayFlow() {
+    return game.currentDish?.name === "AYAM BUAH KELUAK" && game.stepIndex === 3;
+  }
+
+  function updateStep1UiModel() {
+    const s = game.step1;
+
+    if (s.intro) {
+      s.showProgress = false;
+      s.progress = 0;
+      s.smashProgress = 0;
+      s.poundProgress = 0;
+      return;
+    }
+
+    if (s.phase === "lying") {
+      s.showProgress = false;
+      s.progress = 0;
+      s.smashProgress = 0;
+      s.poundProgress = 0;
+      return;
+    }
+
+    if (s.phase === "smash") {
+      s.showProgress = true;
+      s.progress = Math.max(0, Math.min(1, s.smashCount / Math.max(1, s.smashNeed)));
+      s.smashProgress = s.progress;
+      s.poundProgress = 0;
+      return;
+    }
+
+    if (s.phase === "scoop") {
+      s.showProgress = false;
+      s.progress = 0;
+      s.smashProgress = Math.max(0, Math.min(1, s.smashCount / Math.max(1, s.smashNeed)));
+      s.poundProgress = 0;
+      return;
+    }
+
+    s.showProgress = true;
+    s.progress = Math.max(0, Math.min(1, s.poundCount / Math.max(1, s.poundNeed)));
+    s.smashProgress = 1;
+    s.poundProgress = s.progress;
+  }
+
+  function startStep1Flow() {
+    game.step1 = {
+      ...game.step1,
+      active: true,
+      intro: true,
+      introTimer: 5,
+      animT: 0,
+      smashPulse: 0,
+      lastSmashAt: 0,
+      phase: "smash",
+      scoopStage: 0,
+      scoopNeed: 2,
+      scoopHold: 0,
+      scoopFill: 0,
+      scoopHolding: false,
+      smashCount: 0,
+      smashNeed: 14,
+      poundCount: 0,
+      poundNeed: 18,
+      progress: 0,
+      smashProgress: 0,
+      poundProgress: 0,
+      showProgress: false,
+      placedOnPlate: true
+    };
+
+    game.dishCountdown = 0;
+    setAlert("STEP 1 INTRO", "rgba(255, 224, 102, 0.95)", 1.0);
+  }
+
+  function completeStep1Flow() {
+    game.step1.active = false;
+    game.step1.intro = false;
+    setAlert("STEP 1 COMPLETE!", "rgba(128, 255, 114, 0.92)", 0.9);
+    awardStepPoints(1.15);
+    advanceStep();
+  }
+
+  function handleStep1Key(code) {
+    const s = game.step1;
+    if (!s.active || s.intro) return;
+    if (!QWER_CODES.includes(code)) return;
+
+    if (s.phase === "smash") {
+      const now = performance.now();
+      const dtSmash = s.lastSmashAt > 0 ? (now - s.lastSmashAt) / 1000 : 0;
+      s.lastSmashAt = now;
+
+      if (dtSmash > 0.24) {
+        s.smashPulse = 0.35;
+        s.smashCount = Math.max(0, s.smashCount - 1);
+        setAlert("TOO SLOW! SPAM FASTER", "rgba(255, 89, 94, 0.92)", 0.4);
+        playBeep(220, 0.03);
+        return;
+      }
+
+      s.smashCount++;
+      s.smashPulse = 1;
+      game.score += 12;
+      updateHUD();
+      playBeep(700, 0.04);
+      if (s.smashCount >= s.smashNeed) {
+        s.phase = "scoop";
+        s.scoopStage = 0;
+        s.scoopFill = 0;
+        s.scoopHolding = false;
+        s.scoopHold = 0;
+        setAlert("HOLD W TO SCOOP", "rgba(255, 224, 102, 0.95)", 0.7);
+      }
+      return;
+    }
+
+    if (s.phase === "scoop") {
+      if (code !== "KeyW") {
+        setAlert("HOLD W TO SCOOP", "rgba(255, 224, 102, 0.95)", 0.6);
+        playBeep(230, 0.03);
+        return;
+      }
+      s.scoopHolding = true;
+      return;
+    }
+
+    s.poundCount++;
+    game.score += 15;
+    updateHUD();
+    playBeep(740, 0.04);
+    if (s.poundCount >= s.poundNeed) completeStep1Flow();
+  }
+
+  function updateStep1(dt) {
+    const s = game.step1;
+    if (!s.active) return;
+
+    s.animT += dt;
+    s.smashPulse = Math.max(0, Number(s.smashPulse || 0) - dt * 6.2);
+
+    if (s.intro) {
+      s.introTimer = Math.max(0, s.introTimer - dt);
+      if (s.introTimer <= 0) {
+        s.intro = false;
+        setAlert("STEP 1 START!", "rgba(128, 255, 114, 0.92)", 0.7);
+      }
+    }
+
+    if (s.phase === "smash") {
+      const since = s.lastSmashAt > 0 ? (performance.now() - s.lastSmashAt) / 1000 : 0;
+      if (since > 0.3) s.smashCount = Math.max(0, s.smashCount - dt * 4.4);
+    }
+
+    if (s.phase === "scoop" && s.scoopStage < s.scoopNeed) {
+      if (s.scoopHolding) {
+        s.scoopFill = Math.min(1, Number(s.scoopFill || 0) + dt / 1.3);
+      } else {
+        s.scoopFill = Math.max(0, Number(s.scoopFill || 0) - dt * 0.35);
+      }
+
+      const nextStage = s.scoopFill >= 1 ? 2 : s.scoopFill >= 0.5 ? 1 : 0;
+      if (nextStage > s.scoopStage) {
+        s.scoopStage = nextStage;
+        game.score += nextStage === 1 ? 18 : 42;
+        updateHUD();
+        if (nextStage === 1) {
+          playBeep(780, 0.05);
+          setAlert("SCOOP HALF FULL", "rgba(255, 224, 102, 0.95)", 0.45);
+        } else {
+          playBeep(840, 0.06);
+          s.scoopHold = 0.4;
+          s.scoopHolding = false;
+          setAlert("SCOOP FULL!", "rgba(128, 255, 114, 0.92)", 0.45);
+          completeStep1Flow();
+          return;
+        }
+      }
+    }
+
+    updateStep1UiModel();
+  }
+
+  function startStep2Flow() {
+    const comboLen = 5;
+    const comboSeq = Array.from({ length: comboLen }, () => QWER_CODES[Math.floor(Math.random() * QWER_CODES.length)]);
+    game.step2 = {
+      ...game.step2,
+      active: true,
+      intro: true,
+      introTimer: 5,
+      animT: 0,
+      phase: "addPaste",
+      addedPaste: false,
+      addedChicken: false,
+      comboSeq,
+      comboIndex: 0,
+      comboLen,
+      transitionT: 0,
+      boilTimer: 5,
+      boilDuration: 5
+    };
+
+    game.dishCountdown = 0;
+    setAlert("STEP 2 INTRO", "rgba(255, 224, 102, 0.95)", 1.0);
+  }
+
+  function completeStep2Flow() {
+    game.step2.active = false;
+    game.step2.intro = false;
+    setAlert("STEP 2 COMPLETE!", "rgba(128, 255, 114, 0.92)", 0.9);
+    awardStepPoints(1.15);
+    advanceStep();
+  }
+
+  function updateStep2(dt) {
+    const s = game.step2;
+    if (!s.active) return;
+
+    s.animT += dt;
+
+    if (s.intro) {
+      s.introTimer = Math.max(0, s.introTimer - dt);
+      if (s.introTimer <= 0) {
+        s.intro = false;
+        setAlert("COMBO TO ADD PASTE (QWER)", "rgba(255, 224, 102, 0.95)", 0.8);
+      }
+      return;
+    }
+
+    if (s.phase === "addPasteAnim") {
+      s.transitionT = Math.max(0, s.transitionT - dt);
+      if (s.transitionT <= 0) {
+        s.addedPaste = true;
+        s.phase = "addChicken";
+        s.comboSeq = Array.from({ length: s.comboLen || 5 }, () => QWER_CODES[Math.floor(Math.random() * QWER_CODES.length)]);
+        s.comboIndex = 0;
+        setAlert("PASTE ADDED! COMBO FOR CHICKEN", "rgba(255, 224, 102, 0.95)", 0.8);
+      }
+      return;
+    }
+
+    if (s.phase === "addChickenAnim") {
+      s.transitionT = Math.max(0, s.transitionT - dt);
+      if (s.transitionT <= 0) {
+        s.addedChicken = true;
+        s.phase = "boil";
+        s.boilTimer = s.boilDuration;
+        setAlert("CHICKEN ADDED! BOIL FOR 5s", "rgba(128, 255, 114, 0.92)", 0.85);
+      }
+      return;
+    }
+
+    if (s.phase === "boil") {
+      s.boilTimer = Math.max(0, s.boilTimer - dt);
+      if (s.boilTimer <= 0) {
+        completeStep2Flow();
+      }
+    }
+  }
+
+  function handleStep2ComboKey(code) {
+    const s = game.step2;
+    if (!s.active || s.intro) return;
+    if (s.phase !== "addPaste" && s.phase !== "addChicken") return;
+
+    const expected = s.comboSeq[s.comboIndex];
+    if (!expected) return;
+
+    if (code !== expected) {
+      s.comboIndex = 0;
+      applyPenalty("wrongInput");
+      setAlert("WRONG KEY! COMBO RESET", "rgba(255, 89, 94, 0.92)", 0.6);
+      return;
+    }
+
+    s.comboIndex++;
+    game.score += 20;
+    updateHUD();
+    playBeep(620 + s.comboIndex * 22, 0.045);
+
+    if (s.comboIndex < s.comboSeq.length) {
+      setAlert(`COMBO ${s.comboIndex}/${s.comboSeq.length}`, "rgba(255, 224, 102, 0.95)", 0.45);
+      return;
+    }
+
+    s.comboIndex = 0;
+
+    if (s.phase === "addPaste") {
+      s.phase = "addPasteAnim";
+      s.transitionT = 0.8;
+      game.score += 70;
+      updateHUD();
+      playBeep(710, 0.07);
+      setAlert("ADDING PASTE...", "rgba(128, 255, 114, 0.92)", 0.7);
+      return;
+    }
+
+    if (s.phase === "addChicken") {
+      s.phase = "addChickenAnim";
+      s.transitionT = 0.85;
+      game.score += 90;
+      updateHUD();
+      playBeep(760, 0.08);
+      setAlert("ADDING CHICKEN...", "rgba(128, 255, 114, 0.92)", 0.75);
+    }
+  }
+
+  function startStep3Intro() {
+    game.step3Intro = {
+      active: true,
+      timer: 5,
+      animT: 0
+    };
+    game.step3 = {
+      ...game.step3,
+      active: false,
+      pointer: 0.5,
+      sweetMin: 0.42,
+      sweetMax: 0.58,
+      finishAnim: false,
+      finishTimer: 0,
+      stirPhase: 0
+    };
+    setAlert("STEP 3 INTRO", "rgba(255, 224, 102, 0.95)", 0.9);
+  }
+
+  function startStep4Intro() {
+    game.step4Intro = {
+      active: true,
+      timer: 5,
+      animT: 0
+    };
+    game.step4 = {
+      ...game.step4,
+      active: false,
+      phase: "timing",
+      pointer: 0.5,
+      pointerDir: 1,
+      sweetMin: 0.44,
+      sweetMax: 0.58,
+      animT: 0,
+      phaseT: 0,
+      finalT: 0
+    };
+    setAlert("STEP 4 INTRO", "rgba(255, 224, 102, 0.95)", 0.9);
+  }
+
+  function updateStep3Intro(dt) {
+    if (!game.step3Intro.active) return;
+    game.step3Intro.animT += dt;
+    game.step3Intro.timer = Math.max(0, game.step3Intro.timer - dt);
+    if (game.step3Intro.timer <= 0) {
+      game.step3Intro.active = false;
+      game.step3.active = true;
+      setAlert("STEP 3 START! STIR AT THE RIGHT SPEED", "rgba(128, 255, 114, 0.92)", 0.9);
+    }
+  }
+
+  function updateStep4Intro(dt) {
+    if (!game.step4Intro.active) return;
+    game.step4Intro.animT += dt;
+    game.step4Intro.timer = Math.max(0, game.step4Intro.timer - dt);
+    if (game.step4Intro.timer <= 0) {
+      game.step4Intro.active = false;
+      game.step4.active = true;
+      setAlert("PRESS W IN THE GREEN ZONE", "rgba(128, 255, 114, 0.92)", 0.9);
+    }
+  }
+
+  function completeStep4Flow() {
+    game.step4.active = false;
+    setAlert("FINAL DISH SERVED!", "rgba(128, 255, 114, 0.95)", 0.9);
+    game.score += 500;
+    updateHUD();
+
+    game.step1.active = false;
+    game.step2.active = false;
+    game.step3Intro.active = false;
+    game.step3.active = false;
+    game.step4Intro.active = false;
+
+    game.state = "menu";
+    if (timer) { clearInterval(timer); timer = null; }
+    startBtn.textContent = "START GAME";
+    startBtn.style.display = "block";
+    restartBtn.style.display = "none";
+  }
+
+  function handleStep4Key(code) {
+    const s = game.step4;
+    if (!s.active) return;
+    if (s.phase !== "timing") return;
+    if (code !== "KeyW") {
+      setAlert("PRESS W IN GREEN ZONE", "rgba(255, 224, 102, 0.95)", 0.5);
+      playBeep(220, 0.03);
+      return;
+    }
+
+    const inSweet = s.pointer >= s.sweetMin && s.pointer <= s.sweetMax;
+    if (!inSweet) {
+      applyPenalty("wrongEnter");
+      setAlert("MISSED TIMING! TRY AGAIN", "rgba(255, 89, 94, 0.92)", 0.7);
+      return;
+    }
+
+    s.phase = "animToPot";
+    s.phaseT = 0;
+    game.score += 120;
+    updateHUD();
+    playBeep(760, 0.07);
+    setAlert("NICE TIMING! SCOOPING...", "rgba(128, 255, 114, 0.92)", 0.8);
+  }
+
+  function updateStep4(dt) {
+    const s = game.step4;
+    if (!s.active) return;
+
+    s.animT += dt;
+
+    if (s.phase === "timing") {
+      s.pointer += s.pointerDir * dt * 0.95;
+      if (s.pointer >= 1) {
+        s.pointer = 1;
+        s.pointerDir = -1;
+      } else if (s.pointer <= 0) {
+        s.pointer = 0;
+        s.pointerDir = 1;
+      }
+      return;
+    }
+
+    if (s.phase === "animToPot") {
+      s.phaseT += dt;
+      if (s.phaseT >= 0.7) {
+        s.phase = "animToPlate";
+        s.phaseT = 0;
+      }
+      return;
+    }
+
+    if (s.phase === "animToPlate") {
+      s.phaseT += dt;
+      if (s.phaseT >= 0.85) {
+        s.phase = "final";
+        s.finalT = 1.35;
+        s.phaseT = 0;
+        setAlert("AYAM BUAH KELUAK SERVED!", "rgba(128, 255, 114, 0.95)", 0.9);
+      }
+      return;
+    }
+
+    if (s.phase === "final") {
+      s.finalT = Math.max(0, s.finalT - dt);
+      if (s.finalT <= 0) completeStep4Flow();
+    }
+  }
+
+  function updateStep3Gameplay(dt) {
+    if (!shouldRunStep3GameplayFlow()) return;
+
+    const s = game.step3;
+    const ps = game.processMini;
+    if (!s.active) s.active = true;
+
+    if (s.finishAnim) s.stirPhase += dt * 9.5;
+
+    if (ps && ps.active && !s.finishAnim) {
+      const wobble = Math.sin((ps.beats || 0) * 0.7) * 0.05;
+      const pointer = 0.5 + (Number(ps.smooth || 0) * 0.045) + wobble;
+      s.pointer = Math.max(0, Math.min(1, pointer));
+
+      const inSweet = s.pointer >= s.sweetMin && s.pointer <= s.sweetMax;
+      if (inSweet) {
+        ps.timeLeft = Math.min(Math.max(2, Number(currentStep()?.time || 10)), ps.timeLeft + dt * 0.08);
+      } else {
+        ps.timeLeft = Math.max(0.2, ps.timeLeft - dt * 0.32);
+      }
+    }
+
+    if (s.finishAnim) {
+      s.finishTimer = Math.max(0, s.finishTimer - dt);
+      if (s.finishTimer <= 0) {
+        s.finishAnim = false;
+        s.active = false;
+        advanceStep();
+      }
+    }
   }
 
   function resetScanState(selectedDish) {
@@ -265,6 +1037,255 @@ export function createGame({ canvas, startBtn, restartBtn, hud }) {
     return seq;
   }
 
+  function setProcessFx(text, ttl = 0.55) {
+    game.processMini.effectText = text;
+    game.processMini.effectT = ttl;
+  }
+
+  function generateComboSequence(step) {
+    const target = Math.max(1, Number(step.targetBeats) || 8);
+    const mode = String(step.comboMode || "smash");
+
+    if (mode === "sizzle") {
+      const base = Array.isArray(step.basePattern) && step.basePattern.length
+        ? step.basePattern
+        : ["KeyW", "KeyE", "KeyR", "KeyQ"];
+      const seq = [];
+      for (let i = 0; i < target; i++) seq.push(base[i % base.length]);
+      return seq;
+    }
+
+    if (mode === "plate") {
+      const chain = ["KeyQ", "KeyW", "KeyE", "KeyR", "KeyW", "KeyE", "KeyQ", "KeyR"];
+      const seq = [];
+      for (let i = 0; i < target; i++) {
+        const source = chain[i % chain.length];
+        seq.push(i >= 6 ? QWER_CODES[Math.floor(Math.random() * 4)] : source);
+      }
+      return seq;
+    }
+
+    const seq = [];
+    for (let i = 0; i < target; i++) seq.push(QWER_CODES[Math.floor(Math.random() * 4)]);
+    return seq;
+  }
+
+  function initComboStep(step) {
+    const seq = generateComboSequence(step);
+    const target = Math.max(1, Number(step.targetBeats) || seq.length || 8);
+    const beatWindow = Math.max(0.18, Number(step.beatWindow ?? step.rhythmWindow) || 0.35);
+    game.processMini = {
+      ...game.processMini,
+      active: true,
+      mode: String(step.comboMode || "smash"),
+      processName: String(step.process || "Combo Process"),
+      seq,
+      index: 0,
+      beats: 0,
+      target,
+      streak: 0,
+      bestStreak: 0,
+      timeLeft: Math.max(2, Number(step.time) || 10),
+      beatWindow,
+      lastHitAt: 0,
+      smooth: 0,
+      aroma: 0,
+      smoke: 0,
+      spill: 0,
+      burn: 0,
+      cueCode: null,
+      cueT: 0,
+      cueEvery: Math.max(0, Number(step.cueEvery) || 0),
+      cueWindow: Math.max(0.25, Number(step.cueWindow) || 1),
+      secretCombo: ["KeyQ", "KeyR", "KeyE", "KeyW", "KeyQ", "KeyE"],
+      secretIndex: 0,
+      masterChef: false,
+      flairBonus: false,
+      perfectPower: false,
+      effectText: "",
+      effectT: 0,
+      smashPulse: 0,
+      smashCrack: 0,
+      smashParticles: []
+    };
+    game.stepProgress = 0;
+    setAlert(`${game.processMini.processName}`, "rgba(255, 224, 102, 0.95)", 0.9);
+  }
+
+  function spawnSmashParticle(sprite, xN, yN, speed = 0.38) {
+    const ps = game.processMini;
+    if (!Array.isArray(ps.smashParticles)) ps.smashParticles = [];
+
+    const a = Math.random() * Math.PI * 2;
+    const mag = speed * (0.7 + Math.random() * 0.8);
+    ps.smashParticles.push({
+      sprite,
+      xN,
+      yN,
+      vx: Math.cos(a) * mag,
+      vy: Math.sin(a) * mag - 0.08,
+      rot: Math.random() * Math.PI * 2,
+      vr: (Math.random() - 0.5) * 7,
+      size: 0.08 + Math.random() * 0.05,
+      life: 0.8 + Math.random() * 0.45
+    });
+
+    if (ps.smashParticles.length > 42) ps.smashParticles.shift();
+  }
+
+  function triggerSmashFx(code, inRhythm) {
+    const ps = game.processMini;
+    ps.smashPulse = Math.min(1, ps.smashPulse + (inRhythm ? 0.72 : 0.5));
+    ps.smashCrack = Math.min(1, ps.beats / Math.max(1, ps.target));
+
+    const pieceSprite = code === "KeyE" || code === "KeyR" ? "smash_chili_fx" : "smash_garlic_fx";
+    for (let i = 0; i < (inRhythm ? 4 : 2); i++) {
+      spawnSmashParticle(pieceSprite, 0.5, 0.64, inRhythm ? 0.44 : 0.3);
+    }
+
+    spawnSmashParticle("smash_impact", 0.5, 0.55, 0.2);
+    if (ps.smooth > 2) spawnSmashParticle("smash_splat_2", 0.48 + Math.random() * 0.04, 0.66, 0.1);
+  }
+
+  function expectedComboCode(step) {
+    const ps = game.processMini;
+    if (!ps.active) initComboStep(step);
+    if (ps.cueCode) return ps.cueCode;
+
+    if (!ps.seq.length) return QWER_CODES[Math.floor(Math.random() * 4)];
+    return ps.seq[Math.min(ps.index, ps.seq.length - 1)];
+  }
+
+  function comboMiss(mode, text) {
+    game.processMini.streak = 0;
+    if (mode === "smash") game.processMini.spill = Math.min(1, game.processMini.spill + 0.45);
+    if (mode === "sizzle") game.processMini.smoke = Math.min(1, game.processMini.smoke + 0.6);
+    if (mode === "stir") game.processMini.burn = Math.min(1, game.processMini.burn + 0.55);
+    if (mode === "plate") game.processMini.spill = Math.min(1, game.processMini.spill + 0.35);
+
+    game.processMini.timeLeft = Math.max(0.25, game.processMini.timeLeft - 0.4);
+    setProcessFx(text || "MISS");
+    applyPenalty("wrongInput");
+  }
+
+  function updateSecretCombo(code) {
+    const ps = game.processMini;
+    const expected = ps.secretCombo[ps.secretIndex];
+    if (code === expected) {
+      ps.secretIndex++;
+      if (ps.secretIndex >= ps.secretCombo.length) {
+        ps.secretIndex = 0;
+        game.score += 450;
+        game.flavorMeter = Math.min(1, game.flavorMeter + 0.2);
+        setAlert("SECRET RHYTHM! BONUS +450", "rgba(255, 224, 102, 0.98)", 0.95);
+        updateHUD();
+      }
+    } else {
+      ps.secretIndex = code === ps.secretCombo[0] ? 1 : 0;
+    }
+  }
+
+  function handleComboKey(code, step) {
+    if (!game.processMini.active) initComboStep(step);
+    const ps = game.processMini;
+    const mode = ps.mode;
+
+    if (mode === "stir" && game.step3?.finishAnim) return;
+
+    const expected = expectedComboCode(step);
+    const now = performance.now();
+    const dt = ps.lastHitAt ? (now - ps.lastHitAt) / 1000 : ps.beatWindow;
+    const inRhythm = dt <= ps.beatWindow;
+
+    if (code !== expected) {
+      comboMiss(mode, mode === "sizzle" ? "OVERFRY!" : "MISSED BEAT!");
+      if (mode === "sizzle") setAlert("SMOKE CLOUD!", "rgba(255, 89, 94, 0.92)", 0.7);
+      return;
+    }
+
+    ps.lastHitAt = now;
+    ps.beats++;
+    ps.index = Math.min(ps.seq.length - 1, ps.index + 1);
+    ps.streak++;
+    ps.bestStreak = Math.max(ps.bestStreak, ps.streak);
+    ps.smooth = Math.max(-4, Math.min(10, ps.smooth + (inRhythm ? 1 : -0.5)));
+    ps.aroma = Math.min(1, ps.aroma + (mode === "sizzle" ? 0.1 : 0.04));
+    game.flavorMeter = Math.min(1, game.flavorMeter + (inRhythm ? 0.03 : 0.015));
+
+    awardStepPoints(0.3 + (inRhythm ? 0.15 : 0));
+    updateSecretCombo(code);
+
+    if (mode === "sizzle") {
+      const fxMap = {
+        KeyW: "Garlic Sizzle",
+        KeyE: "Chili Pop",
+        KeyR: "Ginger Aroma",
+        KeyQ: "Flame Flicker"
+      };
+      setProcessFx(fxMap[code] || "Sizzle");
+    } else if (mode === "smash") {
+      triggerSmashFx(code, inRhythm);
+      setProcessFx(inRhythm ? "Smooth Paste" : "Lumpy Paste");
+    } else if (mode === "stir") {
+      setProcessFx("Juicy Stir");
+    } else {
+      setProcessFx("Plating Flow");
+    }
+
+    if (ps.cueCode) {
+      ps.cueCode = null;
+      ps.cueT = 0;
+      game.score += 120;
+      setAlert("CUE HIT!", "rgba(128, 255, 114, 0.92)", 0.45);
+      updateHUD();
+    }
+
+    if (mode === "stir" && ps.cueEvery > 0 && ps.beats % ps.cueEvery === 0 && !ps.cueCode) {
+      ps.cueCode = QWER_CODES[Math.floor(Math.random() * 4)];
+      ps.cueT = ps.cueWindow;
+      setAlert("REACT CUE!", "rgba(255, 224, 102, 0.95)", 0.45);
+    }
+
+    if (step.perfectPowerUp && ps.beats >= 8 && ps.streak >= 8 && ps.smooth >= 6 && !ps.perfectPower) {
+      ps.perfectPower = true;
+      ps.beats = ps.target;
+      game.score += 300;
+      game.flavorMeter = Math.min(1, game.flavorMeter + 0.12);
+      setAlert("POWER-UP: PERFECT PASTE!", "rgba(128, 255, 114, 0.95)", 0.9);
+      updateHUD();
+    }
+
+    if (mode === "plate" && ps.beats >= ps.target && dt <= (Number(step.rhythmWindow) || 0.3)) {
+      ps.flairBonus = true;
+      game.score += 250;
+      setAlert("FLAIR PLATING +250", "rgba(128, 255, 114, 0.95)", 0.8);
+      updateHUD();
+    }
+
+    game.stepProgress = Math.max(0, Math.min(1, ps.beats / Math.max(1, ps.target)));
+
+    if (ps.beats >= ps.target) {
+      if (mode === "stir" && shouldRunStep3GameplayFlow()) {
+        game.step3.finishAnim = true;
+        game.step3.finishTimer = 1.15;
+        game.score += 220;
+        updateHUD();
+        setAlert("STIR COMPLETE!", "rgba(128, 255, 114, 0.95)", 0.8);
+        return;
+      }
+
+      if (step.allowMasterChef && game.flavorMeter >= 0.95 && ps.bestStreak >= 7) {
+        ps.masterChef = true;
+        game.score += 600;
+        setAlert("PERANAKAN MASTER CHEF!", "rgba(128, 255, 114, 0.95)", 1.0);
+        updateHUD();
+      } else {
+        setAlert("PROCESS COMPLETE!", "rgba(128, 255, 114, 0.92)", 0.7);
+      }
+      advanceStep();
+    }
+  }
+
   function ensureCookSeqReady(step) {
     if (!step || step.type !== "cook") return;
     if (game.cookSeq.length > 0) return;
@@ -287,10 +1308,26 @@ export function createGame({ canvas, startBtn, restartBtn, hud }) {
       return;
     }
 
+    if (shouldRunStep2Flow()) {
+      startStep2Flow();
+      return;
+    }
+
+    if (shouldRunStep3IntroFlow()) {
+      startStep3Intro();
+      return;
+    }
+
+    if (shouldRunStep4IntroFlow()) {
+      startStep4Intro();
+      return;
+    }
+
     const step = currentStep();
     if (step) {
       if (step.type === "serve") setAlert("SERVE: press W", "rgba(128, 255, 114, 0.92)", 0.9);
       else if (step.type === "cook") setAlert("COOK: match the icons (QWER)", "rgba(255, 224, 102, 0.90)", 0.9);
+      else if (step.type === "combo") setAlert(`${step.process || "COMBO PROCESS"}`, "rgba(255, 224, 102, 0.90)", 0.9);
       else setAlert(`NEXT: ${step.label}`, "rgba(255, 224, 102, 0.90)", 0.9);
     }
   }
@@ -503,11 +1540,39 @@ function handlePrepOrActionPress(pressedIngredient) {
     if (game.state === "dish-select") {
       const key = String(e.key).toUpperCase();
       const idx = keyLabels.indexOf(key);
-      if (idx !== -1 && dishOptions[idx]) startScan(dishOptions[idx]);
+      if (idx !== -1 && dishOptions[idx]) {
+        if (testMode) startGame(dishOptions[idx]);
+        else startScan(dishOptions[idx]);
+      }
       return;
     }
 
     if (game.state !== "playing") return;
+    if (game.step1.active) {
+      if (e.repeat) return;
+      const step1Code = e.code;
+      if (!QWER_CODES.includes(step1Code)) return;
+      e.preventDefault();
+      handleStep1Key(step1Code);
+      return;
+    }
+    if (game.step2.active) {
+      if (e.repeat || game.step2.intro) return;
+      const step2Code = e.code;
+      if (!QWER_CODES.includes(step2Code)) return;
+      e.preventDefault();
+      handleStep2ComboKey(step2Code);
+      return;
+    }
+    if (game.step4.active) {
+      if (e.repeat) return;
+      if (e.code !== "KeyW") return;
+      e.preventDefault();
+      handleStep4Key(e.code);
+      return;
+    }
+    if (game.step3Intro.active) return;
+    if (game.step4Intro.active) return;
     if (game.dishCountdown > 0) return;
     if (e.repeat) return;
 
@@ -537,22 +1602,35 @@ function handlePrepOrActionPress(pressedIngredient) {
       return;
     }
 
+    if (step.type === "combo") {
+      handleComboKey(code, step);
+      return;
+    }
+
     if (step.type === "prep" || step.type === "action") {
       const pressedIngredient = ingredientForKeyIndex(qwerIndex);
       handlePrepOrActionPress(pressedIngredient);
     }
   }
 
+  function onKeyUp(e) {
+    if (game.state !== "playing") return;
+    if (!game.step1.active || game.step1.intro) return;
+    if (game.step1.phase !== "scoop") return;
+    if (e.code === "KeyW") game.step1.scoopHolding = false;
+  }
+
   document.addEventListener("keydown", onKeyDown);
+  document.addEventListener("keyup", onKeyUp);
 
   function onCanvasClick(e) {
-    if (game.state !== "dish-select") return;
-
     const rect = canvas.getBoundingClientRect();
     const scaleX = canvas.width / rect.width;
     const scaleY = canvas.height / rect.height;
     const x = (e.clientX - rect.left) * scaleX;
     const y = (e.clientY - rect.top) * scaleY;
+
+    if (game.state !== "dish-select") return;
 
     const count = Math.min(4, dishOptions.length);
     if (count === 0) return;
@@ -569,7 +1647,8 @@ function handlePrepOrActionPress(pressedIngredient) {
       const cy = startY;
       const inside = x >= cx && x <= cx + cardW && y >= cy && y <= cy + cardH;
       if (inside && dishOptions[i]) {
-        startScan(dishOptions[i]);
+        if (testMode) startGame(dishOptions[i]);
+        else startScan(dishOptions[i]);
         return;
       }
     }
@@ -620,6 +1699,45 @@ function handlePrepOrActionPress(pressedIngredient) {
     }
   }
 
+  function updateComboStep(dt) {
+    const step = currentStep();
+    if (!step || step.type !== "combo") return;
+    if (!game.processMini.active) initComboStep(step);
+
+    const ps = game.processMini;
+    ps.timeLeft = Math.max(0, ps.timeLeft - dt);
+    ps.smoke = Math.max(0, ps.smoke - dt * 0.45);
+    ps.spill = Math.max(0, ps.spill - dt * 0.9);
+    ps.burn = Math.max(0, ps.burn - dt * 0.55);
+    ps.smashPulse = Math.max(0, (ps.smashPulse || 0) - dt * 2.3);
+    if (ps.effectT > 0) ps.effectT = Math.max(0, ps.effectT - dt);
+
+    if (Array.isArray(ps.smashParticles) && ps.smashParticles.length) {
+      for (let i = ps.smashParticles.length - 1; i >= 0; i--) {
+        const p = ps.smashParticles[i];
+        p.life -= dt;
+        p.xN += p.vx * dt;
+        p.yN += p.vy * dt;
+        p.vy += 0.5 * dt;
+        p.rot += p.vr * dt;
+        if (p.life <= 0 || p.xN < -0.2 || p.xN > 1.2 || p.yN > 1.3) ps.smashParticles.splice(i, 1);
+      }
+    }
+
+    if (ps.cueT > 0) {
+      ps.cueT = Math.max(0, ps.cueT - dt);
+      if (ps.cueT <= 0 && ps.cueCode) {
+        ps.cueCode = null;
+        comboMiss(ps.mode, "MISSED CUE!");
+      }
+    }
+
+    if (ps.timeLeft <= 0) {
+      comboMiss(ps.mode, "TIME SLIP!");
+      ps.timeLeft = 1.2;
+    }
+  }
+
   function updateShake(dt) {
     if (game.shake > 0) game.shake = Math.max(0, game.shake - 0.8);
 
@@ -639,9 +1757,28 @@ function handlePrepOrActionPress(pressedIngredient) {
     lastFrameTs = ts;
 
     if (game.state === "playing") {
-      updateDishCountdown(dt);
-      updateShake(dt);
-      if (game.dishCountdown <= 0) updateCookStep(dt);
+      if (game.step1.active) {
+        updateStep1(dt);
+      } else if (game.step2.active) {
+        updateStep2(dt);
+      } else if (game.step3Intro.active) {
+        updateStep3Intro(dt);
+        updateShake(dt);
+      } else if (game.step4Intro.active) {
+        updateStep4Intro(dt);
+        updateShake(dt);
+      } else if (game.step4.active) {
+        updateStep4(dt);
+        updateShake(dt);
+      } else {
+        updateDishCountdown(dt);
+        updateShake(dt);
+        if (game.dishCountdown <= 0) {
+          updateCookStep(dt);
+          updateStep3Gameplay(dt);
+          if (!game.step3.finishAnim) updateComboStep(dt);
+        }
+      }
       updateAlert(dt);
     }
 
@@ -666,21 +1803,38 @@ function handlePrepOrActionPress(pressedIngredient) {
 
     if (game.state === "playing") {
       const uiBottomY = drawTopStack(ctx, canvas, game, alertState);
+      if (game.step1.active) {
+        if (game.step1.intro) drawStep1Intro(ctx, canvas, game.step1, assets);
+        else drawStep1Gameplay(ctx, canvas, game.step1, assets);
+      } else if (game.step2.active) {
+        if (game.step2.intro) drawStep2Intro(ctx, canvas, game.step2, assets);
+        else drawStep2Gameplay(ctx, canvas, game.step2, assets);
+      } else if (game.step3Intro.active) {
+        drawStep3Intro(ctx, canvas, game.step3Intro, assets);
+      } else if (game.step4Intro.active) {
+        drawStep4Intro(ctx, canvas, game.step4Intro, assets);
+      } else if (game.step4.active) {
+        drawStep4Gameplay(ctx, canvas, game, assets);
+      } else if (shouldRunStep3GameplayFlow()) {
+        drawStep3Gameplay(ctx, canvas, game, assets);
+      } else {
+        let y = uiBottomY;
+        y += drawComboFlames(ctx, canvas, game, y) + 10;
 
-      let y = uiBottomY;
-      y += drawComboFlames(ctx, canvas, game, y) + 10;
+        if (game.shake > 0) game.shake--;
 
-      if (game.shake > 0) game.shake--;
+        drawPlate(ctx, canvas, game, assets, y);
 
-      drawPlate(ctx, canvas, game, assets, y);
+        drawProcessOverlay(ctx, canvas, game, assets);
 
-      drawInstructions(ctx, canvas, game, {
-        currentStep,
-        getNeededForStep,
-        getDoneForStep,
-        keyLabelForIngredient,
-        assets
-      });
+        drawInstructions(ctx, canvas, game, {
+          currentStep,
+          getNeededForStep,
+          getDoneForStep,
+          keyLabelForIngredient,
+          assets
+        });
+      }
     }
 
     if (game.state === "gameover") drawGameOver(ctx, canvas);
@@ -699,22 +1853,12 @@ function handlePrepOrActionPress(pressedIngredient) {
         startBtn.textContent = "START GAME";
       }
 
-      if (testMode) {
-        startGame();
-        return;
-      }
-
       pickDishOptions();
       game.state = "dish-select";
       startBtn.style.display = "none";
       restartBtn.style.display = "none";
     },
     restart() {
-      if (testMode) {
-        startGame();
-        return;
-      }
-
       pickDishOptions();
       game.state = "dish-select";
       startBtn.style.display = "none";

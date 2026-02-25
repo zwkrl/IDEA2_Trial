@@ -179,6 +179,167 @@ export function drawComboFlames(ctx, canvas, game, y) {
   return h;
 }
 
+function drawSmashProcessVisual(ctx, canvas, ps, assets) {
+  const areaW = Math.min(460, canvas.width - 120);
+  const areaH = 210;
+  const ax = (canvas.width - areaW) / 2;
+  const ay = canvas.height / 2 - 70;
+
+  const shell = assets?.smash_shell;
+  const crack1 = assets?.smash_crack_1;
+  const crack2 = assets?.smash_crack_2;
+  const pestle = assets?.smash_pestle;
+  const splat1 = assets?.smash_splat_1;
+  const splat2 = assets?.smash_splat_2;
+
+  const drawFxSprite = (img, x, y, w, h, alpha = 1) => {
+    if (!img) return;
+    ctx.save();
+    ctx.globalAlpha = alpha;
+    ctx.globalCompositeOperation = "screen";
+    ctx.drawImage(img, x, y, w, h);
+    ctx.restore();
+  };
+
+  ctx.save();
+  ctx.strokeStyle = "rgba(255,255,255,0.14)";
+  ctx.strokeRect(ax, ay, areaW, areaH);
+
+  const centerX = ax + areaW / 2;
+  const centerY = ay + areaH * 0.62;
+  const pulse = Math.max(0, Math.min(1, ps.smashPulse || 0));
+  const crack = Math.max(0, Math.min(1, ps.smashCrack || 0));
+
+  drawFxSprite(splat1, centerX - 112, centerY - 28, 224, 112, 1);
+  if (splat2 && crack > 0.45) {
+    drawFxSprite(splat2, centerX - 124, centerY - 34, 248, 124, 0.35 + 0.55 * crack);
+  }
+
+  if (shell) {
+    ctx.drawImage(shell, centerX - 82, centerY - 56, 164, 108);
+  } else {
+    ctx.fillStyle = "#6f4b2e";
+    ctx.beginPath();
+    ctx.ellipse(centerX, centerY, 78, 44, 0, 0, Math.PI * 2);
+    ctx.fill();
+  }
+
+  if (crack > 0.2 && crack1) {
+    drawFxSprite(crack1, centerX - 82, centerY - 56, 164, 108, Math.min(1, 0.4 + crack * 0.9));
+  }
+  if (crack > 0.65 && crack2) {
+    drawFxSprite(crack2, centerX - 82, centerY - 56, 164, 108, Math.min(1, 0.15 + crack));
+  }
+
+  if (Array.isArray(ps.smashParticles)) {
+    for (const p of ps.smashParticles) {
+      const px = ax + p.xN * areaW;
+      const py = ay + p.yN * areaH;
+      const size = Math.max(10, p.size * areaW);
+      const alpha = Math.max(0, Math.min(1, p.life));
+      const img = assets?.[p.sprite];
+
+      ctx.save();
+      ctx.globalAlpha = alpha;
+      ctx.translate(px, py);
+      ctx.rotate(p.rot || 0);
+      if (img) {
+        ctx.globalCompositeOperation = "screen";
+        ctx.drawImage(img, -size / 2, -size / 2, size, size);
+      }
+      else {
+        ctx.fillStyle = "rgba(255,224,102,0.8)";
+        ctx.fillRect(-size / 2, -size / 2, size, size * 0.35);
+      }
+      ctx.restore();
+    }
+  }
+
+  const lift = 16 + pulse * 20;
+  const tilt = -0.7 + pulse * 0.18;
+  ctx.save();
+  ctx.translate(centerX + 44, centerY - lift);
+  ctx.rotate(tilt);
+  if (pestle) {
+    ctx.drawImage(pestle, -32, -128, 64, 174);
+  } else {
+    ctx.fillStyle = "#c8ccd1";
+    ctx.fillRect(-10, -120, 20, 134);
+  }
+  ctx.restore();
+
+  ctx.restore();
+}
+
+export function drawProcessOverlay(ctx, canvas, game, assets = null) {
+  const ps = game.processMini;
+  if (!ps || !ps.active) return;
+
+  if (ps.mode === "smash") drawSmashProcessVisual(ctx, canvas, ps, assets);
+
+  const meterW = Math.min(520, canvas.width - 120);
+  const meterH = 18;
+  const mx = (canvas.width - meterW) / 2;
+  const my = canvas.height - 292;
+
+  ctx.save();
+  ctx.fillStyle = "rgba(0,0,0,0.55)";
+  ctx.fillRect(mx - 10, my - 34, meterW + 20, 64);
+  ctx.strokeStyle = "rgba(255,255,255,0.22)";
+  ctx.strokeRect(mx - 10, my - 34, meterW + 20, 64);
+
+  ctx.fillStyle = "#d7d7d7";
+  ctx.font = "bold 14px Courier New";
+  ctx.textAlign = "left";
+  ctx.fillText(`Flavor Meter`, mx, my - 12);
+
+  ctx.fillStyle = "rgba(255,255,255,0.16)";
+  ctx.fillRect(mx, my, meterW, meterH);
+  ctx.fillStyle = "rgba(128,255,114,0.92)";
+  ctx.fillRect(mx, my, meterW * Math.max(0, Math.min(1, game.flavorMeter || 0)), meterH);
+  ctx.strokeStyle = "rgba(255,255,255,0.35)";
+  ctx.strokeRect(mx, my, meterW, meterH);
+
+  ctx.fillStyle = "#a7c7ff";
+  ctx.fillText(`Streak ${ps.streak}  •  Beat ${ps.beats}/${ps.target}  •  Time ${ps.timeLeft.toFixed(1)}s`, mx, my + 38);
+
+  if (ps.cueCode) {
+    const label = { KeyQ: "Q", KeyW: "W", KeyE: "E", KeyR: "R" }[ps.cueCode] || "?";
+    ctx.fillStyle = "rgba(255, 224, 102, 0.95)";
+    ctx.font = "bold 18px Courier New";
+    ctx.textAlign = "center";
+    ctx.fillText(`REACT: ${label}`, canvas.width / 2, my - 44);
+  }
+
+  if (ps.effectT > 0 && ps.effectText) {
+    ctx.fillStyle = "rgba(255,255,255,0.90)";
+    ctx.font = "bold 18px Courier New";
+    ctx.textAlign = "center";
+    ctx.fillText(ps.effectText, canvas.width / 2, canvas.height / 2 - 156);
+  }
+
+  if (ps.smoke > 0) {
+    ctx.fillStyle = `rgba(90, 90, 90, ${0.45 * ps.smoke})`;
+    ctx.fillRect(0, 0, canvas.width, canvas.height);
+  }
+
+  if (ps.spill > 0) {
+    ctx.fillStyle = `rgba(255, 224, 102, ${0.22 * ps.spill})`;
+    for (let i = 0; i < 9; i++) {
+      const x = (i * 173 + 40) % canvas.width;
+      const y = (i * 91 + 55) % canvas.height;
+      ctx.fillRect(x, y, 28, 8);
+    }
+  }
+
+  if (ps.burn > 0) {
+    ctx.fillStyle = `rgba(255, 89, 94, ${0.2 * ps.burn})`;
+    ctx.fillRect(0, canvas.height - 180, canvas.width, 180);
+  }
+
+  ctx.restore();
+}
+
 /* ===================== PLATE + ADDED INGREDIENT STRIP ===================== */
 
 export function drawPlate(ctx, canvas, game, assets, uiTopY = null) {
@@ -360,6 +521,12 @@ export function drawDishSelect(ctx, canvas, options, keyLabels, assets) {
   ctx.font = "18px Courier New";
   ctx.fillText("Press Q W E R", canvas.width / 2, startY - 16);
 
+  const slugifyDishName = (name) => String(name || "")
+    .toLowerCase()
+    .trim()
+    .replace(/[^a-z0-9]+/g, "-")
+    .replace(/^-+|-+$/g, "");
+
   for (let i = 0; i < count; i++) {
     const dish = options[i];
     const x = startX + i * (cardW + pad);
@@ -379,19 +546,27 @@ export function drawDishSelect(ctx, canvas, options, keyLabels, assets) {
     ctx.font = "16px Courier New";
     ctx.fillText(dish.culture, x + cardW / 2, y + 108);
 
-    const iconSize = 60;
-    const iconPad = 10;
-    const rowY = y + 140;
-    const totalIcons = Math.min(4, dish.ingredients.length);
-    const iconsW = totalIcons * iconSize + (totalIcons - 1) * iconPad;
-    let iconX = x + (cardW - iconsW) / 2;
+    const dishKey = `dish_${slugifyDishName(dish.name)}`;
+    const dishImg = assets[dishKey];
+    const imageW = Math.max(120, cardW - 74);
+    const imageH = 112;
+    const imageX = x + (cardW - imageW) / 2;
+    const imageY = y + 142;
 
-    for (let k = 0; k < totalIcons; k++) {
-      const ing = dish.ingredients[k];
-      const img = assets[ingredientPool[ing]?.sprite];
-      if (img) ctx.drawImage(img, iconX, rowY, iconSize, iconSize);
-      iconX += iconSize + iconPad;
+    ctx.save();
+    ctx.fillStyle = "rgba(255,255,255,0.06)";
+    ctx.fillRect(imageX, imageY, imageW, imageH);
+    ctx.strokeStyle = "rgba(255,255,255,0.22)";
+    ctx.strokeRect(imageX, imageY, imageW, imageH);
+
+    if (dishImg) {
+      ctx.drawImage(dishImg, imageX + 2, imageY + 2, imageW - 4, imageH - 4);
+    } else {
+      ctx.fillStyle = "rgba(255,255,255,0.6)";
+      ctx.font = "14px Courier New";
+      ctx.fillText("Dish image not found", x + cardW / 2, imageY + imageH / 2 + 4);
     }
+    ctx.restore();
 
     ctx.fillStyle = "#a7c7ff";
     ctx.font = "14px Courier New";
@@ -711,10 +886,831 @@ export function drawInstructions(ctx, canvas, game, helpers) {
     ctx.fillText(`Sequences: ${game.cookCombosDone}/${game.cookCombosNeed}`, panelX + 18, iconsY + 58);
 
     drawCookBar(ctx, canvas, game, step, canvas.height - 250);
+  } else if (step.type === "combo") {
+    const ps = game.processMini || {};
+    const seq = Array.isArray(ps.seq) ? ps.seq : [];
+    const labelMap = { KeyQ: "Q", KeyW: "W", KeyE: "E", KeyR: "R" };
+
+    ctx.fillStyle = "#d7d7d7";
+    ctx.font = "16px Courier New";
+    ctx.fillText(`COMBO PROCESS (QWER): follow rhythm and keep the streak alive.`, panelX + 18, controlsY);
+
+    const size = 36;
+    const gap = 10;
+    const show = seq.slice(Math.max(0, (ps.index || 0) - 1), Math.max(0, (ps.index || 0) - 1) + 7);
+    const totalW = show.length * size + Math.max(0, show.length - 1) * gap;
+    let sx = canvas.width / 2 - totalW / 2;
+    const sy = controlsY + 18;
+
+    for (let i = 0; i < show.length; i++) {
+      const globalIndex = Math.max(0, (ps.index || 0) - 1) + i;
+      const code = show[i];
+      const isNext = globalIndex === (ps.index || 0);
+      const isDone = globalIndex < (ps.index || 0);
+
+      ctx.save();
+      ctx.fillStyle = isDone
+        ? "rgba(128,255,114,0.86)"
+        : isNext
+          ? "rgba(255,224,102,0.92)"
+          : "rgba(255,255,255,0.14)";
+      ctx.fillRect(sx, sy, size, size);
+      ctx.strokeStyle = "rgba(255,255,255,0.28)";
+      ctx.strokeRect(sx, sy, size, size);
+
+      ctx.fillStyle = isDone || isNext ? "#111" : "#fff";
+      ctx.font = "bold 18px Courier New";
+      ctx.textAlign = "center";
+      ctx.textBaseline = "middle";
+      ctx.fillText(labelMap[code] || "?", sx + size / 2, sy + size / 2);
+      ctx.restore();
+
+      sx += size + gap;
+    }
+
+    ctx.textAlign = "left";
+    ctx.textBaseline = "alphabetic";
+    ctx.fillStyle = "#a7c7ff";
+    ctx.font = "14px Courier New";
+    ctx.fillText(`Beat ${ps.beats || 0}/${ps.target || 0} • Best streak ${ps.bestStreak || 0}`, panelX + 18, sy + 56);
   } else if (step.type === "serve") {
     ctx.fillStyle = "#d7d7d7";
     ctx.font = "16px Courier New";
     ctx.fillText(`SERVE (QWER only): press W`, panelX + 18, controlsY);
+  }
+
+  ctx.restore();
+}
+
+export function drawStep1Intro(ctx, canvas, step1, assets = {}) {
+  const t = Number(step1?.introTimer || 0);
+
+  ctx.save();
+  ctx.fillStyle = "rgba(0,0,0,0.68)";
+  ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+  const panelW = Math.min(900, canvas.width - 120);
+  const panelH = 260;
+  const panelX = (canvas.width - panelW) / 2;
+  const panelY = canvas.height / 2 - panelH / 2;
+  drawPanel(ctx, panelX, panelY, panelW, panelH, 0.7);
+
+  ctx.textAlign = "center";
+  ctx.textBaseline = "middle";
+
+  ctx.fillStyle = "#ffe066";
+  ctx.font = "bold 44px Courier New";
+  ctx.fillText("Step 1: Crack & Make Paste", canvas.width / 2, panelY + 76);
+
+  ctx.fillStyle = "#d7d7d7";
+  ctx.font = "20px Courier New";
+  ctx.fillText("Get ready to crack buah keluak and pound the paste!", canvas.width / 2, panelY + 124);
+
+  const icon = assets?.smash_shell;
+  const bounce = Math.sin((step1?.animT || 0) * 5.2) * 10;
+  const iconSize = 92;
+  const ix = canvas.width / 2 - iconSize / 2;
+  const iy = panelY + 148 + bounce;
+  if (icon) {
+    ctx.drawImage(icon, ix, iy, iconSize, iconSize * 0.72);
+  } else {
+    ctx.fillStyle = "#6f4b2e";
+    ctx.beginPath();
+    ctx.ellipse(canvas.width / 2, iy + iconSize * 0.35, 38, 24, 0, 0, Math.PI * 2);
+    ctx.fill();
+  }
+
+  ctx.fillStyle = "#a7c7ff";
+  ctx.font = "16px Courier New";
+  ctx.fillText(`Starting in ${Math.max(0, Math.ceil(t))}...`, canvas.width / 2, panelY + panelH - 28);
+  ctx.restore();
+}
+
+export function getStep2ButtonRects(canvas) {
+  const bw = 250;
+  const bh = 58;
+  const gap = 24;
+  const totalW = bw * 2 + gap;
+  const startX = canvas.width / 2 - totalW / 2;
+  const y = canvas.height - 140;
+
+  return {
+    paste: { x: startX, y, w: bw, h: bh },
+    chicken: { x: startX + bw + gap, y, w: bw, h: bh }
+  };
+}
+
+export function drawStep2Intro(ctx, canvas, step2, assets = {}) {
+  const t = Number(step2?.introTimer || 0);
+
+  ctx.save();
+  ctx.fillStyle = "rgba(0,0,0,0.74)";
+  ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+  const panelW = Math.min(920, canvas.width - 120);
+  const panelH = 250;
+  const panelX = (canvas.width - panelW) / 2;
+  const panelY = canvas.height / 2 - panelH / 2;
+  drawPanel(ctx, panelX, panelY, panelW, panelH, 0.74);
+
+  ctx.textAlign = "center";
+  ctx.textBaseline = "middle";
+
+  ctx.fillStyle = "#ffe066";
+  ctx.font = "bold 44px Courier New";
+  ctx.fillText("Step 2: Start Cooking the Chicken", canvas.width / 2, panelY + 88);
+
+  ctx.fillStyle = "#d7d7d7";
+  ctx.font = "20px Courier New";
+  ctx.fillText("Prepare the pot, add paste, then add chicken.", canvas.width / 2, panelY + 138);
+
+  ctx.fillStyle = "#a7c7ff";
+  ctx.font = "16px Courier New";
+  ctx.fillText(`Starting in ${Math.max(0, Math.ceil(t))}...`, canvas.width / 2, panelY + 192);
+
+  ctx.restore();
+}
+
+export function drawStep2Gameplay(ctx, canvas, step2, assets = {}) {
+  const phaseText = {
+    addPaste: "Complete combo to add paste",
+    addPasteAnim: "Adding paste...",
+    addChicken: "Complete combo to add chicken",
+    addChickenAnim: "Adding chicken...",
+    boil: "Boiling chicken..."
+  }[step2?.phase] || "Cook the chicken";
+
+  const labelForCode = (c) => ({ KeyQ: "Q", KeyW: "W", KeyE: "E", KeyR: "R" }[c] || "?");
+  const comboSeq = Array.isArray(step2?.comboSeq) ? step2.comboSeq : [];
+  const comboIndex = Math.max(0, Number(step2?.comboIndex || 0));
+
+  const hintText = {
+    addPaste: "Press keys in order (Q/W/E/R)",
+    addPasteAnim: "Paste animation",
+    addChicken: "Press keys in order (Q/W/E/R)",
+    addChickenAnim: "Chicken animation",
+    boil: `Wait ${Math.max(0, Number(step2?.boilTimer || 0)).toFixed(1)}s`
+  }[step2?.phase] || "Follow the next action";
+
+  const chicken = assets?.chicken;
+  const spoon = assets?.scoop_spoon_full || assets?.scoop_spoon_half || assets?.scoop_spoon_empty;
+  const potBase = assets?.step2_pot;
+  const potPaste = assets?.step2_pot_paste;
+  const potFinished = assets?.step2_pot_finished;
+
+  ctx.save();
+  ctx.textAlign = "center";
+  ctx.textBaseline = "middle";
+
+  const instructionX = canvas.width / 2;
+  const instructionY = canvas.height - 172;
+  ctx.fillStyle = "rgba(0,0,0,0.52)";
+  ctx.fillRect(instructionX - 280, instructionY - 52, 560, 108);
+  ctx.strokeStyle = "rgba(255,255,255,0.2)";
+  ctx.strokeRect(instructionX - 280, instructionY - 52, 560, 108);
+
+  ctx.fillStyle = "#ffe066";
+  ctx.font = "bold 30px Courier New";
+  ctx.fillText("Step 2: Start Cooking the Chicken", instructionX, instructionY - 20);
+
+  ctx.fillStyle = "#d7d7d7";
+  ctx.font = "19px Courier New";
+  ctx.fillText(phaseText, instructionX, instructionY + 10);
+
+  ctx.fillStyle = "#a7c7ff";
+  ctx.font = "15px Courier New";
+  ctx.fillText(hintText, instructionX, instructionY + 36);
+
+  if ((step2?.phase === "addPaste" || step2?.phase === "addChicken") && comboSeq.length) {
+    const size = 44;
+    const gap = 12;
+    const totalW = comboSeq.length * size + Math.max(0, comboSeq.length - 1) * gap;
+    let sx = canvas.width / 2 - totalW / 2;
+    const sy = instructionY + 64;
+
+    for (let i = 0; i < comboSeq.length; i++) {
+      const code = comboSeq[i];
+      const isDone = i < comboIndex;
+      const isNext = i === comboIndex;
+
+      ctx.save();
+      if (isDone) {
+        ctx.fillStyle = "rgba(128,255,114,0.86)";
+      } else if (isNext) {
+        ctx.fillStyle = "rgba(255,224,102,0.92)";
+      } else {
+        ctx.fillStyle = "rgba(255,255,255,0.14)";
+      }
+      ctx.fillRect(sx, sy, size, size);
+      ctx.strokeStyle = "rgba(255,255,255,0.28)";
+      ctx.strokeRect(sx, sy, size, size);
+
+      ctx.fillStyle = isDone || isNext ? "#111" : "#fff";
+      ctx.font = "bold 22px Courier New";
+      ctx.textAlign = "center";
+      ctx.textBaseline = "middle";
+      ctx.fillText(labelForCode(code), sx + size / 2, sy + size / 2);
+      ctx.restore();
+
+      sx += size + gap;
+    }
+
+    ctx.textAlign = "center";
+    ctx.textBaseline = "middle";
+  }
+
+  const potCx = canvas.width / 2;
+  const potCy = canvas.height / 2;
+  const potW = 720;
+  const potH = 360;
+
+  const potX = potCx - potW / 2;
+  const potY = potCy - potH / 2;
+
+  const showPastePot = !!step2?.addedPaste || step2?.phase === "addChicken" || step2?.phase === "addChickenAnim";
+  const showFinishedPot = !!step2?.addedChicken || step2?.phase === "boil";
+  const potSprite = showFinishedPot
+    ? (potFinished || potPaste || potBase)
+    : showPastePot
+      ? (potPaste || potBase)
+      : potBase;
+
+  if (potSprite) {
+    ctx.fillStyle = "rgba(0,0,0,0.35)";
+    ctx.beginPath();
+    ctx.ellipse(potCx, potCy + potH * 0.45, potW * 0.4, 28, 0, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.drawImage(potSprite, potX, potY, potW, potH);
+  } else {
+    ctx.fillStyle = "rgba(0,0,0,0.4)";
+    ctx.beginPath();
+    ctx.ellipse(potCx, potCy + potH * 0.45, potW * 0.46, 24, 0, 0, Math.PI * 2);
+    ctx.fill();
+
+    ctx.fillStyle = "rgba(45, 55, 70, 0.96)";
+    ctx.fillRect(potX, potY + 22, potW, potH - 20);
+
+    ctx.fillStyle = "rgba(110, 125, 145, 0.92)";
+    ctx.fillRect(potX, potY + 8, potW, 24);
+
+    ctx.fillStyle = "rgba(90, 105, 125, 0.95)";
+    ctx.fillRect(potX - 20, potY + 56, 20, 54);
+    ctx.fillRect(potX + potW, potY + 56, 20, 54);
+  }
+
+  if (step2?.phase === "addPasteAnim") {
+    const progress = 1 - Math.max(0, Math.min(1, Number(step2?.transitionT || 0) / 0.8));
+    const sx = potX + potW + 90 - progress * (potW * 0.55);
+    const sy = potY - 38 + progress * 145;
+    const sw = 250;
+    const sh = 160;
+    if (spoon) {
+      ctx.save();
+      ctx.translate(sx, sy);
+      ctx.rotate(-0.65 + progress * 0.45);
+      ctx.drawImage(spoon, -sw / 2, -sh / 2, sw, sh);
+      ctx.restore();
+    } else {
+      ctx.fillStyle = "rgba(255,255,255,0.85)";
+      ctx.fillRect(sx - 80, sy - 10, 150, 20);
+    }
+  }
+
+  if (step2?.phase === "addChickenAnim") {
+    const progress = 1 - Math.max(0, Math.min(1, Number(step2?.transitionT || 0) / 0.85));
+    const cx = potX - 120 + progress * (potW * 0.46);
+    const cy = potY - 10 + progress * 138;
+    if (chicken) {
+      ctx.save();
+      ctx.translate(cx, cy);
+      ctx.rotate(-0.35 + progress * 0.42);
+      ctx.drawImage(chicken, -94, -64, 188, 128);
+      ctx.restore();
+    } else {
+      ctx.fillStyle = "rgba(255, 205, 120, 0.95)";
+      ctx.beginPath();
+      ctx.ellipse(cx, cy, 58, 32, 0, 0, Math.PI * 2);
+      ctx.fill();
+    }
+  }
+
+  if (step2?.phase === "boil") {
+    const t = step2?.animT || 0;
+    for (let i = 0; i < 11; i++) {
+      const wave = i * 0.57;
+      const bx = potX + 80 + ((i * 71 + t * 108) % (potW - 160));
+      const by = potY + 222 - ((t * 52 + i * 14) % 72);
+      const r = 3 + Math.sin(t * 8 + wave) * 1.4;
+      ctx.fillStyle = "rgba(230, 240, 255, 0.75)";
+      ctx.beginPath();
+      ctx.arc(bx, by, Math.max(1.6, r), 0, Math.PI * 2);
+      ctx.fill();
+    }
+
+    ctx.fillStyle = "rgba(255,255,255,0.86)";
+    ctx.font = "bold 30px Courier New";
+    ctx.fillText(`${Math.max(0, Number(step2?.boilTimer || 0)).toFixed(1)}s`, potCx, potY - 26);
+  }
+
+  ctx.restore();
+}
+
+export function drawStep3Intro(ctx, canvas, step3Intro, assets = {}) {
+  const t = Number(step3Intro?.timer || 0);
+
+  ctx.save();
+  ctx.fillStyle = "rgba(0,0,0,0.74)";
+  ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+  const panelW = Math.min(920, canvas.width - 120);
+  const panelH = 230;
+  const panelX = (canvas.width - panelW) / 2;
+  const panelY = canvas.height / 2 - panelH / 2;
+  drawPanel(ctx, panelX, panelY, panelW, panelH, 0.74);
+
+  ctx.textAlign = "center";
+  ctx.textBaseline = "middle";
+
+  ctx.fillStyle = "#ffe066";
+  ctx.font = "bold 40px Courier New";
+  ctx.fillText("Step 3: Stir Carefully – Not Too Fast, Not Too Slow", canvas.width / 2, panelY + 82);
+
+  ctx.fillStyle = "#d7d7d7";
+  ctx.font = "18px Courier New";
+  ctx.fillText("Keep the pointer in the glowing sweet spot.", canvas.width / 2, panelY + 126);
+
+  const barW = Math.min(520, panelW - 180);
+  const barH = 18;
+  const bx = canvas.width / 2 - barW / 2;
+  const by = panelY + 152;
+  const sweetMin = 0.42;
+  const sweetMax = 0.58;
+
+  ctx.fillStyle = "rgba(255,255,255,0.16)";
+  ctx.fillRect(bx, by, barW, barH);
+
+  ctx.save();
+  ctx.shadowColor = "rgba(128,255,114,0.9)";
+  ctx.shadowBlur = 12;
+  ctx.fillStyle = "rgba(128,255,114,0.88)";
+  ctx.fillRect(bx + barW * sweetMin, by, barW * (sweetMax - sweetMin), barH);
+  ctx.restore();
+
+  const demoX = bx + barW * (0.5 + Math.sin((step3Intro?.animT || 0) * 2.6) * 0.24);
+  ctx.fillStyle = "rgba(255,224,102,0.95)";
+  ctx.fillRect(demoX - 4, by - 6, 8, barH + 12);
+  ctx.strokeStyle = "rgba(255,255,255,0.35)";
+  ctx.strokeRect(bx, by, barW, barH);
+
+  ctx.fillStyle = "#a7c7ff";
+  ctx.font = "16px Courier New";
+  ctx.fillText(`Starting in ${Math.max(0, Math.ceil(t))}...`, canvas.width / 2, panelY + 214);
+
+  ctx.restore();
+}
+
+export function drawStep3Gameplay(ctx, canvas, game, assets = {}) {
+  const step = game.steps[game.stepIndex] || null;
+  const ps = game.processMini || {};
+  const s3 = game.step3 || {};
+  const labelMap = { KeyQ: "Q", KeyW: "W", KeyE: "E", KeyR: "R" };
+
+  const pot = assets?.step2_pot_finished || assets?.step2_pot_paste || assets?.step2_pot;
+  const spoon = assets?.scoop_spoon_full || assets?.scoop_spoon_half || assets?.scoop_spoon_empty;
+
+  const potW = 720;
+  const potH = 360;
+  const potX = canvas.width / 2 - potW / 2;
+  const potY = canvas.height / 2 - potH / 2 + 18;
+
+  ctx.save();
+  ctx.textAlign = "center";
+  ctx.textBaseline = "middle";
+
+  const headerY = 84;
+  ctx.fillStyle = "rgba(0,0,0,0.52)";
+  ctx.fillRect(canvas.width / 2 - 360, headerY - 42, 720, 108);
+  ctx.strokeStyle = "rgba(255,255,255,0.2)";
+  ctx.strokeRect(canvas.width / 2 - 360, headerY - 42, 720, 108);
+
+  ctx.fillStyle = "#ffe066";
+  ctx.font = "bold 30px Courier New";
+  ctx.fillText("Step 3: Stir Carefully", canvas.width / 2, headerY - 12);
+  ctx.fillStyle = "#a7c7ff";
+  ctx.font = "15px Courier New";
+  ctx.fillText("Keep pointer in sweet zone while completing combo", canvas.width / 2, headerY + 18);
+
+  const barW = 560;
+  const barH = 20;
+  const bx = canvas.width / 2 - barW / 2;
+  const by = canvas.height - 116;
+  const sweetMin = Number(s3.sweetMin ?? 0.42);
+  const sweetMax = Number(s3.sweetMax ?? 0.58);
+  const pointer = Math.max(0, Math.min(1, Number(s3.pointer ?? 0.5)));
+
+  ctx.fillStyle = "rgba(255,255,255,0.16)";
+  ctx.fillRect(bx, by, barW, barH);
+  ctx.save();
+  ctx.shadowColor = "rgba(128,255,114,0.9)";
+  ctx.shadowBlur = 12;
+  ctx.fillStyle = "rgba(128,255,114,0.88)";
+  ctx.fillRect(bx + barW * sweetMin, by, barW * (sweetMax - sweetMin), barH);
+  ctx.restore();
+  ctx.strokeStyle = "rgba(255,255,255,0.35)";
+  ctx.strokeRect(bx, by, barW, barH);
+
+  const px = bx + barW * pointer;
+  ctx.fillStyle = "rgba(255,224,102,0.96)";
+  ctx.fillRect(px - 4, by - 7, 8, barH + 14);
+
+  const seq = Array.isArray(ps.seq) ? ps.seq : [];
+  const idx = Math.max(0, Number(ps.index || 0));
+  if (seq.length) {
+    const size = 42;
+    const gap = 10;
+    const show = seq.slice(Math.max(0, idx - 1), Math.max(0, idx - 1) + 7);
+    const totalW = show.length * size + Math.max(0, show.length - 1) * gap;
+    let sx = canvas.width / 2 - totalW / 2;
+    const sy = 184;
+
+    for (let i = 0; i < show.length; i++) {
+      const globalIndex = Math.max(0, idx - 1) + i;
+      const isNext = globalIndex === idx;
+      const isDone = globalIndex < idx;
+      ctx.save();
+      ctx.fillStyle = isDone
+        ? "rgba(128,255,114,0.86)"
+        : isNext
+          ? "rgba(255,224,102,0.92)"
+          : "rgba(255,255,255,0.14)";
+      ctx.fillRect(sx, sy, size, size);
+      ctx.strokeStyle = "rgba(255,255,255,0.28)";
+      ctx.strokeRect(sx, sy, size, size);
+      ctx.fillStyle = isDone || isNext ? "#111" : "#fff";
+      ctx.font = "bold 20px Courier New";
+      ctx.fillText(labelMap[show[i]] || "?", sx + size / 2, sy + size / 2);
+      ctx.restore();
+      sx += size + gap;
+    }
+  }
+
+  if (pot) {
+    ctx.fillStyle = "rgba(0,0,0,0.35)";
+    ctx.beginPath();
+    ctx.ellipse(canvas.width / 2, potY + potH * 0.92, potW * 0.4, 28, 0, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.drawImage(pot, potX, potY, potW, potH);
+  }
+
+  const stirAnim = Number(s3.stirPhase || 0);
+  if (spoon && s3.finishAnim) {
+    const angle = -0.55 + Math.sin(stirAnim * 2.4) * 0.42 * 1.9;
+    const radius = 102 + Math.sin(stirAnim * 3.3) * 10;
+    const sx = canvas.width / 2 + Math.cos(stirAnim * 2.2) * radius;
+    const sy = potY + potH * 0.38 + Math.sin(stirAnim * 2.2) * 20;
+
+    ctx.save();
+    ctx.translate(sx, sy);
+    ctx.rotate(angle);
+    ctx.drawImage(spoon, -112, -78, 224, 156);
+    ctx.restore();
+  }
+
+  ctx.fillStyle = "#a7c7ff";
+  ctx.font = "16px Courier New";
+  ctx.fillText(`Beat ${ps.beats || 0}/${ps.target || 0}  •  Time ${Math.max(0, Number(ps.timeLeft || 0)).toFixed(1)}s`, canvas.width / 2, canvas.height - 56);
+
+  if (s3.finishAnim) {
+    ctx.fillStyle = "rgba(128,255,114,0.92)";
+    ctx.font = "bold 26px Courier New";
+    ctx.fillText("FINISHING STIR...", canvas.width / 2, canvas.height - 96);
+  }
+
+  ctx.restore();
+}
+
+export function drawStep4Intro(ctx, canvas, step4Intro, assets = {}) {
+  const t = Number(step4Intro?.timer || 0);
+
+  ctx.save();
+  ctx.fillStyle = "rgba(0,0,0,0.74)";
+  ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+  const panelW = Math.min(960, canvas.width - 120);
+  const panelH = 250;
+  const panelX = (canvas.width - panelW) / 2;
+  const panelY = canvas.height / 2 - panelH / 2;
+  drawPanel(ctx, panelX, panelY, panelW, panelH, 0.74);
+
+  ctx.textAlign = "center";
+  ctx.textBaseline = "middle";
+
+  ctx.fillStyle = "#ffe066";
+  ctx.font = "bold 40px Courier New";
+  ctx.fillText("Step 4: Plate and Serve Your Ayam Buah Keluak!", canvas.width / 2, panelY + 88);
+
+  ctx.fillStyle = "#d7d7d7";
+  ctx.font = "20px Courier New";
+  ctx.fillText("Press W at the right time to scoop and plate.", canvas.width / 2, panelY + 140);
+
+  ctx.fillStyle = "#a7c7ff";
+  ctx.font = "16px Courier New";
+  ctx.fillText(`Starting in ${Math.max(0, Math.ceil(t))}...`, canvas.width / 2, panelY + 194);
+
+  ctx.restore();
+}
+
+export function drawStep4Gameplay(ctx, canvas, game, assets = {}) {
+  const s4 = game.step4 || {};
+  const pot = assets?.step2_pot_finished || assets?.step2_pot_paste || assets?.step2_pot;
+  const plate = assets?.plate;
+  const spoon = assets?.scoop_spoon_full || assets?.scoop_spoon_half || assets?.scoop_spoon_empty;
+  const serve = assets?.step4_serve;
+
+  const potW = 460;
+  const potH = 250;
+  const potX = canvas.width * 0.80 - potW / 2;
+  const potY = canvas.height / 2 - potH / 2 - 18;
+
+  const plateW = 430;
+  const plateH = 290;
+  const plateX = canvas.width / 2 - plateW / 2;
+  const plateY = canvas.height / 2 - plateH / 2 + 84;
+
+  ctx.save();
+  ctx.textAlign = "center";
+  ctx.textBaseline = "middle";
+
+  const headerY = 86;
+  ctx.fillStyle = "rgba(0,0,0,0.52)";
+  ctx.fillRect(canvas.width / 2 - 390, headerY - 42, 780, 106);
+  ctx.strokeStyle = "rgba(255,255,255,0.2)";
+  ctx.strokeRect(canvas.width / 2 - 390, headerY - 42, 780, 106);
+
+  ctx.fillStyle = "#ffe066";
+  ctx.font = "bold 30px Courier New";
+  ctx.fillText("Step 4: Dish Up & Serve", canvas.width / 2, headerY - 12);
+  ctx.fillStyle = "#a7c7ff";
+  ctx.font = "15px Courier New";
+  ctx.fillText("Press W when pointer is in the green zone", canvas.width / 2, headerY + 18);
+
+  if (s4.phase !== "final") {
+    if (plate) ctx.drawImage(plate, plateX, plateY, plateW, plateH);
+    else {
+      ctx.fillStyle = "rgba(255,255,255,0.14)";
+      ctx.fillRect(plateX, plateY, plateW, plateH);
+    }
+  }
+
+  if (pot) {
+    ctx.fillStyle = "rgba(0,0,0,0.35)";
+    ctx.beginPath();
+    ctx.ellipse(potX + potW * 0.5, potY + potH * 0.92, potW * 0.36, 20, 0, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.drawImage(pot, potX, potY, potW, potH);
+  }
+
+  if (s4.phase === "timing") {
+    const barW = 520;
+    const barH = 20;
+    const bx = canvas.width / 2 - barW / 2;
+    const by = canvas.height - 112;
+    const sweetMin = Number(s4.sweetMin ?? 0.44);
+    const sweetMax = Number(s4.sweetMax ?? 0.58);
+    const pointer = Math.max(0, Math.min(1, Number(s4.pointer ?? 0.5)));
+
+    ctx.fillStyle = "rgba(255,255,255,0.16)";
+    ctx.fillRect(bx, by, barW, barH);
+    ctx.save();
+    ctx.shadowColor = "rgba(128,255,114,0.9)";
+    ctx.shadowBlur = 12;
+    ctx.fillStyle = "rgba(128,255,114,0.88)";
+    ctx.fillRect(bx + barW * sweetMin, by, barW * (sweetMax - sweetMin), barH);
+    ctx.restore();
+    ctx.strokeStyle = "rgba(255,255,255,0.35)";
+    ctx.strokeRect(bx, by, barW, barH);
+
+    const px = bx + barW * pointer;
+    ctx.fillStyle = "rgba(255,224,102,0.96)";
+    ctx.fillRect(px - 4, by - 7, 8, barH + 14);
+  }
+
+  if (spoon && (s4.phase === "animToPot" || s4.phase === "animToPlate")) {
+    let sx = plateX + plateW * 0.5;
+    let sy = plateY + plateH * 0.4;
+    let rot = -0.55;
+
+    if (s4.phase === "animToPot") {
+      const p = Math.max(0, Math.min(1, Number(s4.phaseT || 0) / 0.7));
+      sx = (plateX + plateW * 0.52) + (potX + potW * 0.42 - (plateX + plateW * 0.52)) * p;
+      sy = (plateY + plateH * 0.38) + (potY + potH * 0.42 - (plateY + plateH * 0.38)) * p;
+      rot = -0.55 + p * 0.4;
+    } else if (s4.phase === "animToPlate") {
+      const p = Math.max(0, Math.min(1, Number(s4.phaseT || 0) / 0.85));
+      sx = (potX + potW * 0.42) + (plateX + plateW * 0.5 - (potX + potW * 0.42)) * p;
+      sy = (potY + potH * 0.42) + (plateY + plateH * 0.38 - (potY + potH * 0.42)) * p;
+      rot = -0.15 - p * 0.45;
+    }
+
+    ctx.save();
+    ctx.translate(sx, sy);
+    ctx.rotate(rot);
+    ctx.drawImage(spoon, -108, -74, 216, 148);
+    ctx.restore();
+  }
+
+  if (s4.phase === "final") {
+    if (serve) {
+      const fw = plateW + 90;
+      const fh = plateH + 100;
+      ctx.drawImage(serve, plateX - 45, plateY - 56, fw, fh);
+    }
+    ctx.fillStyle = "rgba(128,255,114,0.95)";
+    ctx.font = "bold 26px Courier New";
+    ctx.fillText("FINAL DISH READY!", canvas.width / 2, canvas.height - 102);
+    ctx.fillStyle = "#a7c7ff";
+    ctx.font = "18px Courier New";
+    ctx.fillText(`Score: ${game.score}`, canvas.width / 2, canvas.height - 74);
+  }
+
+  ctx.restore();
+}
+
+export function drawStep1Gameplay(ctx, canvas, step1, assets = {}) {
+  const panelW = Math.min(980, canvas.width - 90);
+  const panelH = 360;
+  const panelX = (canvas.width - panelW) / 2;
+  const panelY = canvas.height / 2 - panelH / 2;
+
+  const phaseText = {
+    lying: "Shell is ready on the board",
+    smash: "Spam Q W E R quickly to crack",
+    scoop: "Hold W to scoop (half then full)",
+    pound: "Spam to pound smooth paste"
+  }[step1?.phase] || "Crack & Make Paste";
+
+  const hintText = {
+    lying: "Start smashing now",
+    smash: "Press any Q/W/E/R very fast",
+    scoop: `Hold W to fill spoon (${Math.max(0, Math.min(Number(step1?.scoopNeed || 2), Number(step1?.scoopStage || 0)))}/${Math.max(1, Number(step1?.scoopNeed || 2))})`,
+    pound: "Press any Q/W/E/R rapidly"
+  }[step1?.phase] || "Use Q W E R";
+
+  const shell = assets?.smash_shell;
+  const crack1 = assets?.smash_crack_1;
+  const crack2 = assets?.smash_crack_2;
+  const board = assets?.smash_board;
+  const splat1 = assets?.smash_splat_1;
+  const splat2 = assets?.smash_splat_2;
+  const spoonEmpty = assets?.scoop_spoon_empty;
+  const spoonHalf = assets?.scoop_spoon_half;
+  const spoonFull = assets?.scoop_spoon_full;
+
+  const plateCx = canvas.width / 2;
+  const plateCy = canvas.height / 2 + 80;
+  const instructionX = canvas.width / 2;
+  const instructionY = canvas.height - 172;
+
+  const isOnPlate = true;
+  const scoopNeed = Math.max(1, Number(step1?.scoopNeed || 2));
+  const scoopStage = Math.max(0, Math.min(scoopNeed, Number(step1?.scoopStage || 0)));
+  const scoopIsFinal = scoopStage >= scoopNeed;
+  const smashP = Math.max(0, Math.min(1, Number(step1?.smashProgress || 0)));
+  const poundP = Math.max(0, Math.min(1, Number(step1?.poundProgress || 0)));
+
+  ctx.save();
+  ctx.textAlign = "center";
+  ctx.textBaseline = "middle";
+
+  ctx.fillStyle = "rgba(0,0,0,0.52)";
+  ctx.fillRect(instructionX - 255, instructionY - 52, 510, 108);
+  ctx.strokeStyle = "rgba(255,255,255,0.2)";
+  ctx.strokeRect(instructionX - 255, instructionY - 52, 510, 108);
+
+  ctx.fillStyle = "#ffe066";
+  ctx.font = "bold 30px Courier New";
+  ctx.fillText("Step 1: Crack & Make Paste", instructionX, instructionY - 20);
+
+  ctx.fillStyle = "#d7d7d7";
+  ctx.font = "19px Courier New";
+  ctx.fillText(phaseText, instructionX, instructionY + 10);
+  ctx.fillStyle = "#a7c7ff";
+  ctx.font = "15px Courier New";
+  ctx.fillText(hintText, instructionX, instructionY + 36);
+
+  const boardX = canvas.width / 2 + 270;
+  const boardY = canvas.height / 2 + 56;
+
+  const shellW = 128;
+  const shellH = 86;
+
+  const boardW = 468;
+  const boardH = 290;
+  const boardPlacedX = canvas.width / 2 - boardW / 2;
+  const boardPlacedY = canvas.height / 2 - boardH / 2 + 70;
+
+  if (!isOnPlate) {
+    const boardStartX = boardX - boardW / 2;
+    const boardStartY = boardY - boardH / 2 + 26;
+    if (board) ctx.drawImage(board, boardStartX, boardStartY, boardW, boardH);
+
+    const sx = boardX - shellW / 2 - 10;
+    const sy = boardY - shellH / 2 + Math.sin((step1?.animT || 0) * 4.5) * 4;
+    if (shell) ctx.drawImage(shell, sx, sy, shellW, shellH);
+  }
+
+  if (isOnPlate) {
+    if (board) ctx.drawImage(board, boardPlacedX, boardPlacedY, boardW, boardH);
+    else {
+      ctx.fillStyle = "rgba(255,255,255,0.12)";
+      ctx.fillRect(boardPlacedX, boardPlacedY, boardW, boardH);
+    }
+
+    const nx = canvas.width / 2 - shellW / 2 - 22;
+    const ny = boardPlacedY + boardH * 0.49 - shellH / 2;
+
+    if (step1?.phase === "smash") {
+      const smashNear = Math.max(0, (smashP - 0.72) / 0.28);
+
+      if (splat1 && smashNear > 0.05) {
+        ctx.save();
+        ctx.globalAlpha = Math.min(0.85, 0.28 + smashNear * 0.5);
+        ctx.globalCompositeOperation = "screen";
+        ctx.drawImage(splat1, nx - 22, ny + 20, shellW + 44, shellH * 0.75);
+        ctx.restore();
+      }
+
+      if (splat2 && smashNear > 0.62) {
+        ctx.save();
+        ctx.globalAlpha = Math.min(0.9, (smashNear - 0.62) / 0.38 * 0.8 + 0.1);
+        ctx.globalCompositeOperation = "screen";
+        ctx.drawImage(splat2, nx - 28, ny + 18, shellW + 56, shellH * 0.82);
+        ctx.restore();
+      }
+    }
+
+    if (step1?.phase === "scoop") {
+      const scoopRatio = Math.max(0, Math.min(1, scoopStage / scoopNeed));
+      const spoonImg = scoopIsFinal
+        ? (spoonFull || spoonHalf || spoonEmpty)
+        : scoopStage >= 1
+          ? (spoonHalf || spoonFull || spoonEmpty)
+          : (spoonEmpty || spoonHalf || spoonFull);
+      const spoonW = 176;
+      const spoonH = 114;
+      const spoonX = nx + shellW + 44 - scoopRatio * 28;
+      const spoonY = ny + 18 + scoopRatio * 12;
+
+      ctx.save();
+      ctx.translate(spoonX, spoonY);
+      ctx.rotate(-0.58 + scoopRatio * 0.2);
+      if (spoonImg) {
+        ctx.drawImage(spoonImg, -spoonW / 2, -spoonH / 2, spoonW, spoonH);
+      } else {
+        ctx.fillStyle = "rgba(255,255,255,0.35)";
+        ctx.fillRect(-spoonW / 2, -6, spoonW * 0.8, 12);
+      }
+      ctx.restore();
+    }
+
+    const shellFrame = smashP < 0.35
+      ? (shell || crack1 || crack2)
+      : smashP < 0.75
+        ? (crack1 || shell || crack2)
+        : (crack2 || crack1 || shell);
+
+    if (step1?.phase === "pound") {
+      const splatFrame = poundP < 0.55 ? (splat1 || splat2) : (splat2 || splat1);
+      if (splatFrame) {
+        ctx.save();
+        ctx.globalAlpha = 0.65 + Math.min(0.3, poundP * 0.3);
+        ctx.globalCompositeOperation = "screen";
+        ctx.drawImage(splatFrame, nx - 30, ny + 22, shellW + 60, shellH * 0.85);
+        ctx.restore();
+      }
+    }
+
+    if (shellFrame) ctx.drawImage(shellFrame, nx, ny, shellW, shellH);
+
+  }
+
+  const barW = Math.min(560, panelW - 120);
+  const barH = 18;
+  const bx = canvas.width / 2 - barW / 2;
+  const by = canvas.height - 86;
+
+  if (step1?.showProgress) {
+    const p = Math.max(0, Math.min(1, Number(step1.progress || 0)));
+    ctx.fillStyle = "rgba(255,255,255,0.18)";
+    ctx.fillRect(bx, by, barW, barH);
+    ctx.fillStyle = "rgba(128,255,114,0.92)";
+    ctx.fillRect(bx, by, barW * p, barH);
+    ctx.strokeStyle = "rgba(255,255,255,0.35)";
+    ctx.strokeRect(bx, by, barW, barH);
+
+    ctx.fillStyle = "#a7c7ff";
+    ctx.font = "16px Courier New";
+    ctx.fillText(`${Math.floor(p * 100)}%`, canvas.width / 2, by + 34);
   }
 
   ctx.restore();
