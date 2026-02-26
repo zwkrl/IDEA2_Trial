@@ -41,16 +41,45 @@ export const dishes = [
     ingredients: ["chicken", "garlic", "ginger", "chili"],
     steps: [
       {
-        type: "prep",
-        label: "Blend rempah (hit the right keys)",
-        uses: ["garlic", "ginger", "chili"],
-        counts: { garlic: 3, ginger: 3, chili: 4 }
+        type: "combo",
+        process: "Process 1: Smash & Prep Keluak",
+        label: "Hit random 8-beat chop/mash combos (QWER). Fast rhythm = smooth paste.",
+        comboMode: "smash",
+        targetBeats: 8,
+        time: 10,
+        beatWindow: 0.38,
+        perfectPowerUp: true
       },
-      { type: "cook", label: "Fry rempah (HOLD SPACE in green)", time: 4.0, stirPerfectWindow: STIR_PERFECT },
-      { type: "serve", label: "Serve: press ENTER" },
-      { type: "action", label: "Coat chicken", uses: ["chicken"], counts: { chicken: 3 } },
-      { type: "cook", label: "Simmer until tender (HOLD SPACE in green)", time: 4.0, stirPerfectWindow: STIR_PERFECT },
-      { type: "serve", label: "Serve: press ENTER" }
+      {
+        type: "combo",
+        process: "Process 2: Sizzle & Fry",
+        label: "Follow alternating rhythm W-E-R-Q. Build aroma; wrong hits create smoke.",
+        comboMode: "sizzle",
+        basePattern: ["KeyW", "KeyE", "KeyR", "KeyQ"],
+        targetBeats: 12,
+        time: 12,
+        rhythmWindow: 0.34
+      },
+      {
+        type: "combo",
+        process: "Process 3: Stir & Cook Chicken",
+        label: "Keep stir meter in zone and complete a 3-hit combo. Misses can burn the pan.",
+        comboMode: "stir",
+        targetBeats: 3,
+        time: 22,
+        cueEvery: 4,
+        cueWindow: 1.0
+      },
+      {
+        type: "combo",
+        process: "Process 4: Plate & Garnish",
+        label: "Complete the plating chain in rhythm. Perfect garnish timing gives flair bonus.",
+        comboMode: "plate",
+        targetBeats: 10,
+        time: 11,
+        rhythmWindow: 0.3,
+        allowMasterChef: true
+      }
     ]
   },
   {
@@ -59,10 +88,10 @@ export const dishes = [
     ingredients: ["pork", "garlic", "ginger", "chili"],
     steps: [
       { type: "prep", label: "Prep aromatics", uses: ["garlic","ginger"], counts: { garlic: 4, ginger: 4 } },
-      { type: "cook", label: "Fry aromatics (HOLD SPACE in green)", time: 4.0, stirPerfectWindow: STIR_PERFECT },
+      { type: "cook", label: "Fry aromatics ", time: 4.0, stirPerfectWindow: STIR_PERFECT },
       { type: "serve", label: "Serve: press ENTER" },
       { type: "action", label: "Add pork", uses: ["pork"], counts: { pork: 2 } },
-      { type: "cook", label: "Simmer curry (HOLD SPACE in green)", time: 4.0, stirPerfectWindow: STIR_PERFECT },
+      { type: "cook", label: "Simmer curry ", time: 4.0, stirPerfectWindow: STIR_PERFECT },
       { type: "serve", label: "Serve: press ENTER" }
     ]
   },
@@ -72,11 +101,11 @@ export const dishes = [
     ingredients: ["shrimp", "coconut", "chili", "rice"],
     steps: [
       { type: "action", label: "Add chili (make the paste)", uses: ["chili"], counts: { chili: 3 } },
-      { type: "cook", label: "Sauté chili paste (HOLD SPACE in green)", time: 4.0, stirPerfectWindow: STIR_PERFECT },
+      { type: "cook", label: "Sauté chili paste ", time: 4.0, stirPerfectWindow: STIR_PERFECT },
       { type: "serve", label: "Serve: press ENTER" },
 
       { type: "action", label: "Add coconut milk", uses: ["coconut"], counts: { coconut: 2 } },
-      { type: "cook", label: "Simmer broth (HOLD SPACE in green)", time: 4.0, stirPerfectWindow: STIR_PERFECT },
+      { type: "cook", label: "Simmer broth ", time: 4.0, stirPerfectWindow: STIR_PERFECT },
       { type: "serve", label: "Serve: press ENTER" },
 
       { type: "action", label: "Add shrimp", uses: ["shrimp"], counts: { shrimp: 3 } },
@@ -94,7 +123,7 @@ export const dishes = [
     steps: [
       { type: "prep", label: "Prep garlic/ginger", uses: ["garlic","ginger"], counts: { garlic: 3, ginger: 4 } },
       { type: "action", label: "Add chicken pieces", uses: ["chicken"], counts: { chicken: 2 } },
-      { type: "cook", label: "Simmer chicken (HOLD SPACE in green)", time: 4.0, stirPerfectWindow: STIR_PERFECT },
+      { type: "cook", label: "Simmer chicken ", time: 4.0, stirPerfectWindow: STIR_PERFECT },
       { type: "serve", label: "Serve: press ENTER" },
       { type: "action", label: "Add rice", uses: ["rice"], counts: { rice: 2 } },
       { type: "serve", label: "Final serve: press ENTER" }

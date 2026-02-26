@@ -3,26 +3,50 @@ import { ensureAudio, playBeep } from "./audio.js";
 import { dishes, keyLabels, PENALTY, ingredientPool } from "./data.js";
 import {
   drawBackground,
-  drawHeroAlert,
-  drawPlate,
+  drawTopStack,
   drawComboFlames,
-  drawDishInfo,
+  drawPlate,
+  drawProcessOverlay,
   drawInstructions,
-  drawTitle,
-  drawLanding,
+  drawBottomButtons,
+  drawTopSequencePreview,
+  drawLanding, 
   drawScanScreen,
   drawDishSelect,
   drawGameOver,
-  drawWin
+  drawWin,
+  drawStep1Intro,
+  drawStep1Gameplay,
+  drawStep2Intro,
+  drawStep2Gameplay,
+  drawStep3Intro,
+  drawStep3Gameplay,
+  drawStep4Intro,
+  drawStep4Gameplay
 } from "./render.js";
 
 export function createGame({ canvas, startBtn, restartBtn, hud }) {
-  /* ================= CANVAS ================= */
   const ctx = canvas.getContext("2d");
   ctx.imageSmoothingEnabled = false;
+  startBtn.style.display = "none";
+  restartBtn.style.display = "none";
 
-  /* ================= ASSETS ================= */
+  const QWER_CODES = ["KeyQ", "KeyW", "KeyE", "KeyR"];
+  const LEADERBOARD_KEY = "frantic-heritage-cooking.leaderboard.v1";
+  const heldCodes = new Set();
+
+  // Testing bypass (?test=true) [web:58]
+  const urlParams = new URLSearchParams(window.location.search);
+  const testMode = urlParams.get("test") === "true";
+
   const assets = {};
+  function slugifyDishName(name) {
+    return String(name || "")
+      .toLowerCase()
+      .trim()
+      .replace(/[^a-z0-9]+/g, "-")
+      .replace(/^-+|-+$/g, "");
+  }
 
   function loadImage(key, src) {
     return new Promise((res) => {
@@ -33,11 +57,19 @@ export function createGame({ canvas, startBtn, restartBtn, hud }) {
     });
   }
 
+  async function loadImageVariants(key, sources) {
+    for (const src of sources) {
+      const ok = await loadImage(key, src);
+      if (ok) return true;
+    }
+    return false;
+  }
+
   async function loadAssets() {
-    await Promise.all([
+    const baseLoads = [
       loadImage("bg", "/assets/background/kitchen.png"),
       loadImage("plate", "/assets/ui/plate.png"),
-
+      loadImage("main_logo", "/assets/ui/main_logo.png"),
       loadImage("chicken", "/assets/ingredients/chicken.png"),
       loadImage("pork", "/assets/ingredients/pork.png"),
       loadImage("garlic", "/assets/ingredients/garlic.png"),
@@ -45,43 +77,261 @@ export function createGame({ canvas, startBtn, restartBtn, hud }) {
       loadImage("chili", "/assets/ingredients/chili.png"),
       loadImage("shrimp", "/assets/ingredients/shrimp.png"),
       loadImage("coconut", "/assets/ingredients/coconut.png"),
-      loadImage("rice", "/assets/ingredients/rice.png")
-    ]);
+      loadImage("rice", "/assets/ingredients/rice.png"),
+      loadImage("btn_q", "/assets/ui/blue-btn.png"),
+      loadImage("btn_w", "/assets/ui/green-btn.png"),
+      loadImage("btn_e", "/assets/ui/yellow-btn.png"),
+      loadImage("btn_r", "/assets/ui/white-btn.png"),
+      loadImageVariants("smash_pestle", [
+        "/assets/process1/pestle.png",
+        "/assets/process1/pestle (1).png"
+      ]),
+      loadImageVariants("smash_shell", [
+        "/assets/process1/keluak_shell.png",
+        "/assets/process1/keluak_shell (1).png"
+      ]),
+      loadImageVariants("smash_board", [
+        "/assets/process1/cutting_board.png",
+        "/assets/process1/cutting_board (1).png"
+      ]),
+      loadImageVariants("smash_crack_1", [
+        "/assets/process1/keluak_crack_1.png",
+        "/assets/process1/keluak_crack_1 (1).png"
+      ]),
+      loadImageVariants("smash_crack_2", [
+        "/assets/process1/keluak_crack_2.png",
+        "/assets/process1/keluak_crack_2 (1).png"
+      ]),
+      loadImageVariants("smash_splat_1", [
+        "/assets/process1/paste_splat_1.png",
+        "/assets/process1/paste_splat_1 (1).png"
+      ]),
+      loadImageVariants("smash_splat_2", [
+        "/assets/process1/paste_splat_2.png",
+        "/assets/process1/paste_splat_2 (1).png"
+      ]),
+      loadImageVariants("smash_garlic_fx", [
+        "/assets/process1/garlic_slice_fx.png",
+        "/assets/process1/garlic_slice_fx (1).png"
+      ]),
+      loadImageVariants("smash_chili_fx", [
+        "/assets/process1/chili_piece_fx.png",
+        "/assets/process1/chili_piece_fx (1).png"
+      ]),
+      loadImageVariants("smash_impact", [
+        "/assets/process1/impact_star.png",
+        "/assets/process1/impact_star (1).png"
+      ]),
+      loadImageVariants("scoop_spoon_empty", [
+        "/assets/process1/scoop_spoon_empty.png",
+        "/assets/process1/scoop_stage_1.png",
+        "/assets/process1/scoop_spoon.png",
+        "/assets/process1/spoon_empty.png",
+        "/assets/process1/spoon.png"
+      ]),
+      loadImageVariants("scoop_spoon_half", [
+        "/assets/process1/scoop_stage_2.png",
+        "/assets/process1/scoop_spoon_half.png"
+      ]),
+      loadImageVariants("scoop_spoon_full", [
+        "/assets/process1/scoop_spoon_full.png",
+        "/assets/process1/scoop_stage_3.png",
+        "/assets/process1/spoon_full.png"
+      ]),
+      loadImageVariants("step2_pot", [
+        "/assets/process2/POT (3).png",
+        "/assets/process2/pot.png",
+        "/assets/process2/pot (1).png"
+      ]),
+      loadImageVariants("step2_pot_paste", [
+        "/assets/process2/pot_paste.png",
+        "/assets/process2/pot paste.png"
+      ]),
+      loadImageVariants("step2_pot_finished", [
+        "/assets/process2/pot_finished.png",
+        "/assets/process2/pot finished.png"
+      ]),
+      loadImageVariants("step4_serve", [
+        "/assets/process2/serve.png",
+        "/assets/process2/serve (1).png"
+      ])
+    ];
+
+    const dishLoads = dishes.map((dish) => {
+      const slug = slugifyDishName(dish.name);
+      return loadImage(`dish_${slug}`, `/assets/dishes/${slug}.png`);
+    });
+
+    await Promise.all([...baseLoads, ...dishLoads]);
   }
 
-  /* ================= GAME STATE ================= */
+  // Preload title/menu visuals so landing UI is visible before starting.
+  void Promise.all([
+    loadImage("bg", "/assets/background/kitchen.png"),
+    loadImage("main_logo", "/assets/ui/main_logo.png"),
+    loadImage("btn_q", "/assets/ui/blue-btn.png"),
+    loadImage("btn_w", "/assets/ui/green-btn.png"),
+    loadImage("btn_e", "/assets/ui/yellow-btn.png"),
+    loadImage("btn_r", "/assets/ui/white-btn.png")
+  ]);
+
   const game = {
     state: "menu",
     score: 0,
     combo: 0,
     time: 180,
 
-    uniqueDishesCompleted: new Set(),
-    dishesToWin: dishes.length,
-
     shakeOffsetX: 0,
     shakeOffsetY: 0,
     shakeSampleT: 0,
-    shakeHz: 1, // lower = slower vibration
+    shakeHz: 1,
 
     currentDish: null,
-
     sequence: [],
     keyMap: [],
 
     steps: [],
     stepIndex: 0,
-
     stepProgress: 0,
 
     ingCounts: {},
+    plateIcons: [], // array of { ing, t }
 
-    spaceHeld: false,
-    stirredThisStep: false,
-    missedStirThisStep: false,
+    // Cook combo state (existing system)
+    cookSeq: [],
+    cookSeqIndex: 0,
+    cookIconsDone: [],
+    cookIconJitter: [],
+    cookCombosDone: 0,
+    cookCombosNeed: 2,
+
+    flavorMeter: 0,
+    processMini: {
+      active: false,
+      mode: "",
+      processName: "",
+      seq: [],
+      index: 0,
+      beats: 0,
+      target: 0,
+      sequenceLen: 0,
+      sequencesDone: 0,
+      sequencesNeed: 1,
+      streak: 0,
+      bestStreak: 0,
+      timeLeft: 0,
+      beatWindow: 0.35,
+      lastHitAt: 0,
+      smooth: 0,
+      aroma: 0,
+      smoke: 0,
+      spill: 0,
+      burn: 0,
+      cueCode: null,
+      cueT: 0,
+      cueEvery: 0,
+      cueWindow: 1,
+      secretCombo: ["KeyQ", "KeyR", "KeyE", "KeyW", "KeyQ", "KeyE"],
+      secretIndex: 0,
+      masterChef: false,
+      flairBonus: false,
+      perfectPower: false,
+      effectText: "",
+      effectT: 0,
+      smashPulse: 0,
+      smashCrack: 0,
+      smashParticles: []
+    },
+
+    step1: {
+      active: false,
+      intro: false,
+      introTimer: 0,
+      animT: 0,
+      smashPulse: 0,
+      lastSmashAt: 0,
+      phase: "lying",
+      scoopStage: 0,
+      scoopNeed: 2,
+      scoopHold: 0,
+      scoopFill: 0,
+      scoopHolding: false,
+      smashCount: 0,
+      smashNeed: 14,
+      poundCount: 0,
+      poundNeed: 18,
+      progress: 0,
+      smashProgress: 0,
+      poundProgress: 0,
+      showProgress: false,
+      placedOnPlate: false
+    },
+
+    step2: {
+      active: false,
+      intro: false,
+      introTimer: 0,
+      animT: 0,
+      phase: "addPaste",
+      addedPaste: false,
+      addedChicken: false,
+      comboSeq: [],
+      comboIndex: 0,
+      comboLen: 5,
+      transitionT: 0,
+      boilSpamCount: 0,
+      boilSpamNeed: 20
+    },
+
+    step3Intro: {
+      active: false,
+      timer: 0,
+      animT: 0
+    },
+
+    step3: {
+      active: false,
+      pointer: 0.5,
+      pointerDir: 1,
+      sweetMin: 0.42,
+      sweetMax: 0.58,
+      targetCode: "KeyW",
+      hitsDone: 0,
+      hitsNeed: 3,
+      finishAnim: false,
+      finishTimer: 0,
+      stirPhase: 0
+    },
+
+    step4Intro: {
+      active: false,
+      timer: 0,
+      animT: 0
+    },
+
+    step4: {
+      active: false,
+      phase: "combo",
+      comboSeq: [],
+      comboIndex: 0,
+      comboLen: 3,
+      timeLeft: 5,
+      duration: 5,
+      animT: 0,
+      phaseT: 0,
+      finalT: 0
+    },
 
     shake: 0,
-    dishCountdown: 0
+    dishCountdown: 0,
+    keyGlow: {
+      KeyQ: 0,
+      KeyW: 0,
+      KeyE: 0,
+      KeyR: 0
+    },
+    leaderboard: [],
+    endRecorded: false
   };
 
   game.scan = {
@@ -96,32 +346,70 @@ export function createGame({ canvas, startBtn, restartBtn, hud }) {
   };
 
   let dishOptions = [];
-
   let titleTime = 0;
   let timer = null;
   let assetsLoaded = false;
+  let menuStartPending = false;
   let lastFrameTs = null;
 
-  /* ================= HERO ALERTS ================= */
   const alertState = { text: "", color: "rgba(255,255,255,0)", ttl: 0 };
+
+  function loadLeaderboard() {
+    try {
+      const raw = localStorage.getItem(LEADERBOARD_KEY);
+      if (!raw) return [];
+      const parsed = JSON.parse(raw);
+      if (!Array.isArray(parsed)) return [];
+      return parsed
+        .map((x) => ({
+          score: Math.max(0, Number(x?.score) || 0),
+          date: String(x?.date || ""),
+          time: String(x?.time || "")
+        }))
+        .sort((a, b) => b.score - a.score)
+        .slice(0, 10);
+    } catch {
+      return [];
+    }
+  }
+
+  function saveLeaderboard(list) {
+    try {
+      localStorage.setItem(LEADERBOARD_KEY, JSON.stringify(list));
+    } catch {
+      // ignore quota/storage errors
+    }
+  }
+
+  function recordScoreToLeaderboard() {
+    const now = new Date();
+    const stampDate = now.toLocaleDateString("en-US", { year: "numeric", month: "short", day: "numeric" });
+    const stampTime = now.toLocaleTimeString("en-US", { hour: "2-digit", minute: "2-digit", hour12: true });
+    const next = [...game.leaderboard, { score: game.score, date: stampDate, time: stampTime }]
+      .sort((a, b) => b.score - a.score)
+      .slice(0, 10);
+    game.leaderboard = next;
+    saveLeaderboard(next);
+  }
+
+  game.leaderboard = loadLeaderboard();
 
   function setAlert(text, color, ttl = 0.85) {
     alertState.text = String(text || "");
     alertState.color = color;
     alertState.ttl = ttl;
   }
+
   function updateAlert(dt) {
     if (alertState.ttl > 0) alertState.ttl = Math.max(0, alertState.ttl - dt);
   }
 
-  /* ================= HUD ================= */
   function updateHUD() {
     hud.scoreEl.textContent = game.score;
     hud.comboEl.textContent = game.combo + "x";
     hud.timeEl.textContent = game.time;
   }
 
-  /* ================= PENALTIES ================= */
   function applyPenalty(kind = "wrongInput") {
     let scoreLoss = PENALTY.wrongInputScore;
     let timeLoss = PENALTY.wrongInputTime;
@@ -140,7 +428,6 @@ export function createGame({ canvas, startBtn, restartBtn, hud }) {
     updateHUD();
   }
 
-  /* ================= FLOW ================= */
   function shuffle(array) {
     for (let i = array.length - 1; i > 0; i--) {
       const j = Math.floor(Math.random() * (i + 1));
@@ -148,11 +435,56 @@ export function createGame({ canvas, startBtn, restartBtn, hud }) {
     }
   }
 
+  function resetCookIcons() {
+    game.cookSeq = [];
+    game.cookSeqIndex = 0;
+    game.cookIconsDone = [];
+    game.cookIconJitter = [];
+  }
+
+  function resetProcessMini() {
+    game.processMini = {
+      active: false,
+      mode: "",
+      processName: "",
+      seq: [],
+      index: 0,
+      beats: 0,
+      target: 0,
+      sequenceLen: 0,
+      sequencesDone: 0,
+      sequencesNeed: 1,
+      streak: 0,
+      bestStreak: 0,
+      timeLeft: 0,
+      beatWindow: 0.35,
+      lastHitAt: 0,
+      smooth: 0,
+      aroma: 0,
+      smoke: 0,
+      spill: 0,
+      burn: 0,
+      cueCode: null,
+      cueT: 0,
+      cueEvery: 0,
+      cueWindow: 1,
+      secretCombo: ["KeyQ", "KeyR", "KeyE", "KeyW", "KeyQ", "KeyE"],
+      secretIndex: 0,
+      masterChef: false,
+      flairBonus: false,
+      perfectPower: false,
+      effectText: "",
+      effectT: 0,
+      smashPulse: 0,
+      smashCrack: 0,
+      smashParticles: []
+    };
+  }
+
   function resetStepState() {
     game.stepProgress = 0;
-    game.stirredThisStep = false;
-    game.missedStirThisStep = false;
-    game.spaceHeld = false;
+    resetCookIcons();
+    resetProcessMini();
   }
 
   function startDishCountdown(seconds = 3) {
@@ -183,6 +515,7 @@ export function createGame({ canvas, startBtn, restartBtn, hud }) {
 
   function loadDish(selectedDish) {
     game.currentDish = selectedDish || dishes[Math.floor(Math.random() * dishes.length)];
+    game.plateIcons = [];
     game.sequence = [...game.currentDish.ingredients];
 
     game.keyMap = [...game.sequence];
@@ -191,9 +524,585 @@ export function createGame({ canvas, startBtn, restartBtn, hud }) {
     game.steps = (game.currentDish.steps || []).map(s => ({ ...s }));
     game.stepIndex = 0;
     resetStepState();
+    game.cookCombosDone = 0;
+    game.flavorMeter = 0;
 
     initDishCounts();
-    startDishCountdown(3);
+
+    if (shouldRunStep1Flow()) {
+      startStep1Flow();
+    } else {
+      startDishCountdown(3);
+    }
+  }
+
+  function shouldRunStep1Flow() {
+    return game.currentDish?.name === "AYAM BUAH KELUAK" && game.stepIndex === 0;
+  }
+
+  function shouldRunStep2Flow() {
+    return game.currentDish?.name === "AYAM BUAH KELUAK" && game.stepIndex === 1;
+  }
+
+  function shouldRunStep3IntroFlow() {
+    return game.currentDish?.name === "AYAM BUAH KELUAK" && game.stepIndex === 2;
+  }
+
+  function shouldRunStep4IntroFlow() {
+    return game.currentDish?.name === "AYAM BUAH KELUAK" && game.stepIndex === 3;
+  }
+
+  function shouldRunStep3GameplayFlow() {
+    const step = currentStep();
+    return game.currentDish?.name === "AYAM BUAH KELUAK"
+      && game.stepIndex === 2
+      && !!step
+      && step.type === "combo"
+      && String(step.comboMode || "") === "stir";
+  }
+
+  function shouldRunStep4GameplayFlow() {
+    return game.currentDish?.name === "AYAM BUAH KELUAK" && game.stepIndex === 3;
+  }
+
+  function updateStep1UiModel() {
+    const s = game.step1;
+
+    if (s.intro) {
+      s.showProgress = false;
+      s.progress = 0;
+      s.smashProgress = 0;
+      s.poundProgress = 0;
+      return;
+    }
+
+    if (s.phase === "lying") {
+      s.showProgress = false;
+      s.progress = 0;
+      s.smashProgress = 0;
+      s.poundProgress = 0;
+      return;
+    }
+
+    if (s.phase === "smash") {
+      s.showProgress = true;
+      s.progress = Math.max(0, Math.min(1, s.smashCount / Math.max(1, s.smashNeed)));
+      s.smashProgress = s.progress;
+      s.poundProgress = 0;
+      return;
+    }
+
+    if (s.phase === "scoop") {
+      s.showProgress = false;
+      s.progress = 0;
+      s.smashProgress = Math.max(0, Math.min(1, s.smashCount / Math.max(1, s.smashNeed)));
+      s.poundProgress = 0;
+      return;
+    }
+
+    s.showProgress = true;
+    s.progress = Math.max(0, Math.min(1, s.poundCount / Math.max(1, s.poundNeed)));
+    s.smashProgress = 1;
+    s.poundProgress = s.progress;
+  }
+
+  function startStep1Flow() {
+    game.step1 = {
+      ...game.step1,
+      active: true,
+      intro: true,
+      introTimer: 5,
+      animT: 0,
+      smashPulse: 0,
+      lastSmashAt: 0,
+      phase: "smash",
+      scoopStage: 0,
+      scoopNeed: 2,
+      scoopHold: 0,
+      scoopFill: 0,
+      scoopHolding: false,
+      smashCount: 0,
+      smashNeed: 14,
+      poundCount: 0,
+      poundNeed: 18,
+      progress: 0,
+      smashProgress: 0,
+      poundProgress: 0,
+      showProgress: false,
+      placedOnPlate: true
+    };
+
+    game.dishCountdown = 0;
+    setAlert("STEP 1 INTRO", "rgba(255, 224, 102, 0.95)", 1.0);
+  }
+
+  function completeStep1Flow() {
+    game.step1.active = false;
+    game.step1.intro = false;
+    setAlert("STEP 1 COMPLETE!", "rgba(128, 255, 114, 0.92)", 0.9);
+    awardStepPoints(1.15);
+    advanceStep();
+  }
+
+  function handleStep1Key(code) {
+    const s = game.step1;
+    if (!s.active || s.intro) return;
+    if (!QWER_CODES.includes(code)) return;
+
+    if (s.phase === "smash") {
+      const now = performance.now();
+      const dtSmash = s.lastSmashAt > 0 ? (now - s.lastSmashAt) / 1000 : 0;
+      s.lastSmashAt = now;
+
+      if (dtSmash > 0.24) {
+        s.smashPulse = 0.35;
+        s.smashCount = Math.max(0, s.smashCount - 1);
+        setAlert("TOO SLOW! SPAM FASTER", "rgba(255, 89, 94, 0.92)", 0.4);
+        playBeep(220, 0.03);
+        return;
+      }
+
+      s.smashCount++;
+      s.smashPulse = 1;
+      game.score += 12;
+      updateHUD();
+      playBeep(700, 0.04);
+      if (s.smashCount >= s.smashNeed) {
+        s.phase = "scoop";
+        s.scoopStage = 0;
+        s.scoopFill = 0;
+        s.scoopHolding = false;
+        s.scoopHold = 0;
+        setAlert("HOLD GREEN+YELLOW TO SCOOP", "rgba(255, 224, 102, 0.95)", 0.7);
+      }
+      return;
+    }
+
+    if (s.phase === "scoop") {
+      s.scoopHolding = heldCodes.has("KeyW") && heldCodes.has("KeyE");
+      if (!s.scoopHolding) {
+        setAlert("HOLD GREEN+YELLOW TO SCOOP", "rgba(255, 224, 102, 0.95)", 0.6);
+        playBeep(230, 0.03);
+      }
+      return;
+    }
+
+    s.poundCount++;
+    game.score += 15;
+    updateHUD();
+    playBeep(740, 0.04);
+    if (s.poundCount >= s.poundNeed) completeStep1Flow();
+  }
+
+  function updateStep1(dt) {
+    const s = game.step1;
+    if (!s.active) return;
+
+    s.animT += dt;
+    s.smashPulse = Math.max(0, Number(s.smashPulse || 0) - dt * 6.2);
+
+    if (s.intro) {
+      s.introTimer = Math.max(0, s.introTimer - dt);
+      if (s.introTimer <= 0) {
+        s.intro = false;
+        setAlert("STEP 1 START!", "rgba(128, 255, 114, 0.92)", 0.7);
+      }
+    }
+
+    if (s.phase === "smash") {
+      const since = s.lastSmashAt > 0 ? (performance.now() - s.lastSmashAt) / 1000 : 0;
+      if (since > 0.3) s.smashCount = Math.max(0, s.smashCount - dt * 4.4);
+    }
+
+    if (s.phase === "scoop" && s.scoopStage < s.scoopNeed) {
+      s.scoopHolding = heldCodes.has("KeyW") && heldCodes.has("KeyE");
+      if (s.scoopHolding) {
+        s.scoopFill = Math.min(1, Number(s.scoopFill || 0) + dt / 1.3);
+      } else {
+        s.scoopFill = Math.max(0, Number(s.scoopFill || 0) - dt * 0.35);
+      }
+
+      const nextStage = s.scoopFill >= 1 ? 2 : s.scoopFill >= 0.5 ? 1 : 0;
+      if (nextStage > s.scoopStage) {
+        s.scoopStage = nextStage;
+        game.score += nextStage === 1 ? 18 : 42;
+        updateHUD();
+        if (nextStage === 1) {
+          playBeep(780, 0.05);
+          setAlert("SCOOP HALF FULL", "rgba(255, 224, 102, 0.95)", 0.45);
+        } else {
+          playBeep(840, 0.06);
+          s.scoopHold = 0.4;
+          s.scoopHolding = false;
+          setAlert("SCOOP FULL!", "rgba(128, 255, 114, 0.92)", 0.45);
+          completeStep1Flow();
+          return;
+        }
+      }
+    }
+
+    updateStep1UiModel();
+  }
+
+  function startStep2Flow() {
+    const comboLen = 5;
+    const comboSeq = Array.from({ length: comboLen }, () => QWER_CODES[Math.floor(Math.random() * QWER_CODES.length)]);
+    game.step2 = {
+      ...game.step2,
+      active: true,
+      intro: true,
+      introTimer: 5,
+      animT: 0,
+      phase: "addPaste",
+      addedPaste: false,
+      addedChicken: false,
+      comboSeq,
+      comboIndex: 0,
+      comboLen,
+      transitionT: 0,
+      boilSpamCount: 0,
+      boilSpamNeed: 20
+    };
+
+    game.dishCountdown = 0;
+    setAlert("STEP 2 INTRO", "rgba(255, 224, 102, 0.95)", 1.0);
+  }
+
+  function completeStep2Flow() {
+    game.step2.active = false;
+    game.step2.intro = false;
+    setAlert("STEP 2 COMPLETE!", "rgba(128, 255, 114, 0.92)", 0.9);
+    awardStepPoints(1.15);
+    advanceStep();
+  }
+
+  function updateStep2(dt) {
+    const s = game.step2;
+    if (!s.active) return;
+
+    s.animT += dt;
+
+    if (s.intro) {
+      s.introTimer = Math.max(0, s.introTimer - dt);
+      if (s.introTimer <= 0) {
+        s.intro = false;
+        setAlert("COMBO TO ADD PASTE", "rgba(255, 224, 102, 0.95)", 0.8);
+      }
+      return;
+    }
+
+    if (s.phase === "addPasteAnim") {
+      s.transitionT = Math.max(0, s.transitionT - dt);
+      if (s.transitionT <= 0) {
+        s.addedPaste = true;
+        s.phase = "addChicken";
+        s.comboSeq = Array.from({ length: s.comboLen || 5 }, () => QWER_CODES[Math.floor(Math.random() * QWER_CODES.length)]);
+        s.comboIndex = 0;
+        setAlert("PASTE ADDED! COMBO FOR CHICKEN", "rgba(255, 224, 102, 0.95)", 0.8);
+      }
+      return;
+    }
+
+    if (s.phase === "addChickenAnim") {
+      s.transitionT = Math.max(0, s.transitionT - dt);
+      if (s.transitionT <= 0) {
+        s.addedChicken = true;
+        s.phase = "boil";
+        s.boilSpamCount = 0;
+        setAlert("CHICKEN ADDED! SPAM BUTTONS TO BOIL", "rgba(128, 255, 114, 0.92)", 0.85);
+      }
+      return;
+    }
+
+    if (s.phase === "boil") {
+      if ((s.boilSpamCount | 0) >= Math.max(1, s.boilSpamNeed | 0)) {
+        completeStep2Flow();
+      }
+    }
+  }
+
+  function handleStep2ComboKey(code) {
+    const s = game.step2;
+    if (!s.active || s.intro) return;
+    if (s.phase === "boil") {
+      s.boilSpamCount = Math.min(Math.max(1, s.boilSpamNeed | 0), (s.boilSpamCount | 0) + 1);
+      game.score += 8;
+      updateHUD();
+      playBeep(700 + (s.boilSpamCount % 6) * 20, 0.03);
+      if ((s.boilSpamCount | 0) >= Math.max(1, s.boilSpamNeed | 0)) {
+        setAlert("BOIL COMPLETE!", "rgba(128, 255, 114, 0.92)", 0.65);
+      }
+      return;
+    }
+    if (s.phase !== "addPaste" && s.phase !== "addChicken") return;
+
+    const expected = s.comboSeq[s.comboIndex];
+    if (!expected) return;
+
+    if (code !== expected) {
+      s.comboIndex = 0;
+      applyPenalty("wrongInput");
+      setAlert("WRONG KEY! COMBO RESET", "rgba(255, 89, 94, 0.92)", 0.6);
+      return;
+    }
+
+    s.comboIndex++;
+    game.score += 20;
+    updateHUD();
+    playBeep(620 + s.comboIndex * 22, 0.045);
+
+    if (s.comboIndex < s.comboSeq.length) {
+      setAlert(`COMBO ${s.comboIndex}/${s.comboSeq.length}`, "rgba(255, 224, 102, 0.95)", 0.45);
+      return;
+    }
+
+    s.comboIndex = 0;
+
+    if (s.phase === "addPaste") {
+      s.phase = "addPasteAnim";
+      s.transitionT = 0.8;
+      game.score += 70;
+      updateHUD();
+      playBeep(710, 0.07);
+      setAlert("ADDING PASTE...", "rgba(128, 255, 114, 0.92)", 0.7);
+      return;
+    }
+
+    if (s.phase === "addChicken") {
+      s.phase = "addChickenAnim";
+      s.transitionT = 0.85;
+      game.score += 90;
+      updateHUD();
+      playBeep(760, 0.08);
+      setAlert("ADDING CHICKEN...", "rgba(128, 255, 114, 0.92)", 0.75);
+    }
+  }
+
+  function startStep3Intro() {
+    const targetCode = QWER_CODES[Math.floor(Math.random() * QWER_CODES.length)];
+    game.step3Intro = {
+      active: true,
+      timer: 5,
+      animT: 0
+    };
+    game.step3 = {
+      ...game.step3,
+      active: false,
+      pointer: 0.5,
+      pointerDir: 1,
+      sweetMin: 0.42,
+      sweetMax: 0.58,
+      targetCode,
+      hitsDone: 0,
+      hitsNeed: 3,
+      finishAnim: false,
+      finishTimer: 0,
+      stirPhase: 0
+    };
+    setAlert("STEP 3 INTRO", "rgba(255, 224, 102, 0.95)", 0.9);
+  }
+
+  function startStep4Intro() {
+    const comboLen = 3;
+    const comboSeq = Array.from({ length: comboLen }, () => QWER_CODES[Math.floor(Math.random() * QWER_CODES.length)]);
+    game.step4Intro = {
+      active: true,
+      timer: 5,
+      animT: 0
+    };
+    game.step4 = {
+      ...game.step4,
+      active: false,
+      phase: "combo",
+      comboSeq,
+      comboIndex: 0,
+      comboLen,
+      timeLeft: 5,
+      duration: 5,
+      animT: 0,
+      phaseT: 0,
+      finalT: 0
+    };
+    setAlert("STEP 4 INTRO", "rgba(255, 224, 102, 0.95)", 0.9);
+  }
+
+  function updateStep3Intro(dt) {
+    if (!game.step3Intro.active) return;
+    game.step3Intro.animT += dt;
+    game.step3Intro.timer = Math.max(0, game.step3Intro.timer - dt);
+    if (game.step3Intro.timer <= 0) {
+      game.step3Intro.active = false;
+      game.step3.active = true;
+      setAlert("STEP 3 START! HIT THE TARGET BUTTON IN THE GREEN ZONE", "rgba(128, 255, 114, 0.92)", 1.0);
+    }
+  }
+
+  function handleStep3TimingKey(code) {
+    const s = game.step3;
+    if (!shouldRunStep3GameplayFlow()) return;
+    if (!s.active || s.finishAnim) return;
+
+    const inSweet = s.pointer >= s.sweetMin && s.pointer <= s.sweetMax;
+    const correctCode = code === s.targetCode;
+
+    if (!correctCode) {
+      applyPenalty("wrongInput");
+      setAlert("WRONG BUTTON!", "rgba(255, 89, 94, 0.92)", 0.6);
+      return;
+    }
+
+    if (!inSweet) {
+      applyPenalty("wrongEnter");
+      setAlert("BAD TIMING! PRESS IN GREEN ZONE", "rgba(255, 89, 94, 0.92)", 0.65);
+      return;
+    }
+
+    s.hitsDone += 1;
+    game.score += 90;
+    updateHUD();
+    playBeep(760, 0.07);
+
+    if (s.hitsDone >= s.hitsNeed) {
+      s.finishAnim = true;
+      s.finishTimer = 1.15;
+      setAlert("STIR COMPLETE!", "rgba(128, 255, 114, 0.95)", 0.9);
+      return;
+    }
+
+    s.targetCode = QWER_CODES[Math.floor(Math.random() * QWER_CODES.length)];
+    setAlert(`NICE TIMING! ${s.hitsDone}/${s.hitsNeed}`, "rgba(255, 224, 102, 0.95)", 0.55);
+  }
+
+  function updateStep4Intro(dt) {
+    if (!game.step4Intro.active) return;
+    game.step4Intro.animT += dt;
+    game.step4Intro.timer = Math.max(0, game.step4Intro.timer - dt);
+    if (game.step4Intro.timer <= 0) {
+      game.step4Intro.active = false;
+      game.step4.active = true;
+      setAlert("COMPLETE 3-BUTTON COMBO IN 5 SECONDS", "rgba(128, 255, 114, 0.92)", 0.9);
+    }
+  }
+
+  function completeStep4Flow() {
+    game.step4.active = false;
+    setAlert("FINAL DISH SERVED!", "rgba(128, 255, 114, 0.95)", 0.9);
+    game.score += 500;
+    updateHUD();
+
+    game.step1.active = false;
+    game.step2.active = false;
+    game.step3Intro.active = false;
+    game.step3.active = false;
+    game.step4Intro.active = false;
+
+    game.state = "win";
+    if (timer) { clearInterval(timer); timer = null; }
+    startBtn.style.display = "none";
+    restartBtn.style.display = "none";
+  }
+
+  function handleStep4Key(code) {
+    const s = game.step4;
+    if (!s.active) return;
+    if (s.phase !== "combo") return;
+    const expected = s.comboSeq[s.comboIndex];
+    if (!expected) return;
+
+    if (code !== expected) {
+      s.comboIndex = 0;
+      applyPenalty("wrongInput");
+      setAlert("WRONG BUTTON! COMBO RESET", "rgba(255, 89, 94, 0.92)", 0.6);
+      return;
+    }
+
+    s.comboIndex++;
+    game.score += 20;
+    updateHUD();
+    playBeep(620 + s.comboIndex * 22, 0.045);
+
+    if (s.comboIndex < s.comboSeq.length) {
+      setAlert(`COMBO ${s.comboIndex}/${s.comboSeq.length}`, "rgba(255, 224, 102, 0.95)", 0.45);
+      return;
+    }
+
+    s.phase = "animToPot";
+    s.phaseT = 0;
+    game.score += 120;
+    updateHUD();
+    playBeep(760, 0.07);
+    setAlert("NICE TIMING! SCOOPING...", "rgba(128, 255, 114, 0.92)", 0.8);
+  }
+
+  function updateStep4(dt) {
+    const s = game.step4;
+    if (!s.active) return;
+
+    s.animT += dt;
+
+    if (s.phase === "combo") {
+      s.timeLeft = Math.max(0, Number(s.timeLeft || 0) - dt);
+      if (s.timeLeft <= 0) {
+        s.comboIndex = 0;
+        s.timeLeft = Number(s.duration || 5);
+        applyPenalty("wrongInput");
+        setAlert("TIME UP! COMBO RESET", "rgba(255, 89, 94, 0.92)", 0.65);
+      }
+      return;
+    }
+
+    if (s.phase === "animToPot") {
+      s.phaseT += dt;
+      if (s.phaseT >= 0.7) {
+        s.phase = "animToPlate";
+        s.phaseT = 0;
+      }
+      return;
+    }
+
+    if (s.phase === "animToPlate") {
+      s.phaseT += dt;
+      if (s.phaseT >= 0.85) {
+        s.phase = "final";
+        s.finalT = 1.35;
+        s.phaseT = 0;
+        setAlert("AYAM BUAH KELUAK SERVED!", "rgba(128, 255, 114, 0.95)", 0.9);
+      }
+      return;
+    }
+
+    if (s.phase === "final") {
+      s.finalT = Math.max(0, s.finalT - dt);
+      if (s.finalT <= 0) completeStep4Flow();
+    }
+  }
+
+  function updateStep3Gameplay(dt) {
+    if (!shouldRunStep3GameplayFlow()) return;
+
+    const s = game.step3;
+    if (!s.active) s.active = true;
+
+    if (!s.finishAnim) {
+      s.pointer += s.pointerDir * dt * 0.95;
+      if (s.pointer >= 1) {
+        s.pointer = 1;
+        s.pointerDir = -1;
+      } else if (s.pointer <= 0) {
+        s.pointer = 0;
+        s.pointerDir = 1;
+      }
+    }
+
+    if (s.finishAnim) {
+      s.stirPhase += dt * 9.5;
+      s.finishTimer = Math.max(0, s.finishTimer - dt);
+      if (s.finishTimer <= 0) {
+        s.finishAnim = false;
+        s.active = false;
+        advanceStep();
+      }
+    }
   }
 
   function resetScanState(selectedDish) {
@@ -207,7 +1116,6 @@ export function createGame({ canvas, startBtn, restartBtn, hud }) {
       statusByIng,
       input: "",
       inputColor: "rgba(255,255,255,0.35)",
-      message: "Enter ingredient ID",
       messageColor: "#d7d7d7",
       messageT: 0
     };
@@ -232,26 +1140,307 @@ export function createGame({ canvas, startBtn, restartBtn, hud }) {
   function finishDish() {
     game.score += 1000;
     game.combo += 2;
+    game.state = "win";
+    setAlert("DISH COMPLETE!", "rgba(128, 255, 114, 0.92)", 1.0);
+    if (timer) { clearInterval(timer); timer = null; }
+    startBtn.style.display = "none";
+    restartBtn.style.display = "none";
+    updateHUD();
+  }
 
-    if (game.currentDish?.name) game.uniqueDishesCompleted.add(game.currentDish.name);
+  function generateCookSeq() {
+    const len = Math.max(4, Math.min(6, 4 + Math.floor(game.cookCombosDone / 1)));
+    const seq = [];
+    for (let i = 0; i < len; i++) seq.push(QWER_CODES[Math.floor(Math.random() * QWER_CODES.length)]);
+    return seq;
+  }
 
-    if (game.uniqueDishesCompleted.size >= game.dishesToWin) {
-      game.state = "win";
-      setAlert("ALL UNIQUE DISHES COMPLETE!", "rgba(128, 255, 114, 0.92)", 1.2);
+  function setProcessFx(text, ttl = 0.55) {
+    game.processMini.effectText = text;
+    game.processMini.effectT = ttl;
+  }
 
-      if (timer) { clearInterval(timer); timer = null; }
+  function generateComboSequence(step) {
+    const target = Math.max(1, Number(step.targetBeats) || 8);
+    const mode = String(step.comboMode || "smash");
 
-      startBtn.textContent = "PLAY AGAIN";
-      startBtn.style.display = "block";
-      restartBtn.style.display = "none";
+    if (mode === "sizzle") {
+      const base = Array.isArray(step.basePattern) && step.basePattern.length
+        ? step.basePattern
+        : ["KeyW", "KeyE", "KeyR", "KeyQ"];
+      const seq = [];
+      for (let i = 0; i < target; i++) seq.push(base[i % base.length]);
+      return seq;
+    }
 
-      updateHUD();
+    if (mode === "plate") {
+      const chain = ["KeyQ", "KeyW", "KeyE", "KeyR", "KeyW", "KeyE", "KeyQ", "KeyR"];
+      const seq = [];
+      for (let i = 0; i < target; i++) {
+        const source = chain[i % chain.length];
+        seq.push(i >= 6 ? QWER_CODES[Math.floor(Math.random() * 4)] : source);
+      }
+      return seq;
+    }
+
+    const seq = [];
+    for (let i = 0; i < target; i++) seq.push(QWER_CODES[Math.floor(Math.random() * 4)]);
+    return seq;
+  }
+
+  function initComboStep(step) {
+    const seq = generateComboSequence(step);
+    const target = Math.max(1, Number(step.targetBeats) || seq.length || 8);
+    const mode = String(step.comboMode || "smash");
+    const sequencesNeed = mode === "stir" ? 3 : 1;
+    const beatWindow = Math.max(0.18, Number(step.beatWindow ?? step.rhythmWindow) || 0.35);
+    game.processMini = {
+      ...game.processMini,
+      active: true,
+      mode,
+      processName: String(step.process || "Combo Process"),
+      seq,
+      index: 0,
+      beats: 0,
+      target,
+      sequenceLen: target,
+      sequencesDone: 0,
+      sequencesNeed,
+      streak: 0,
+      bestStreak: 0,
+      timeLeft: Math.max(2, Number(step.time) || 10),
+      beatWindow,
+      lastHitAt: 0,
+      smooth: 0,
+      aroma: 0,
+      smoke: 0,
+      spill: 0,
+      burn: 0,
+      cueCode: null,
+      cueT: 0,
+      cueEvery: Math.max(0, Number(step.cueEvery) || 0),
+      cueWindow: Math.max(0.25, Number(step.cueWindow) || 1),
+      secretCombo: ["KeyQ", "KeyR", "KeyE", "KeyW", "KeyQ", "KeyE"],
+      secretIndex: 0,
+      masterChef: false,
+      flairBonus: false,
+      perfectPower: false,
+      effectText: "",
+      effectT: 0,
+      smashPulse: 0,
+      smashCrack: 0,
+      smashParticles: []
+    };
+    game.stepProgress = 0;
+    setAlert(`${game.processMini.processName}`, "rgba(255, 224, 102, 0.95)", 0.9);
+  }
+
+  function spawnSmashParticle(sprite, xN, yN, speed = 0.38) {
+    const ps = game.processMini;
+    if (!Array.isArray(ps.smashParticles)) ps.smashParticles = [];
+
+    const a = Math.random() * Math.PI * 2;
+    const mag = speed * (0.7 + Math.random() * 0.8);
+    ps.smashParticles.push({
+      sprite,
+      xN,
+      yN,
+      vx: Math.cos(a) * mag,
+      vy: Math.sin(a) * mag - 0.08,
+      rot: Math.random() * Math.PI * 2,
+      vr: (Math.random() - 0.5) * 7,
+      size: 0.08 + Math.random() * 0.05,
+      life: 0.8 + Math.random() * 0.45
+    });
+
+    if (ps.smashParticles.length > 42) ps.smashParticles.shift();
+  }
+
+  function triggerSmashFx(code, inRhythm) {
+    const ps = game.processMini;
+    ps.smashPulse = Math.min(1, ps.smashPulse + (inRhythm ? 0.72 : 0.5));
+    ps.smashCrack = Math.min(1, ps.beats / Math.max(1, ps.target));
+
+    const pieceSprite = code === "KeyE" || code === "KeyR" ? "smash_chili_fx" : "smash_garlic_fx";
+    for (let i = 0; i < (inRhythm ? 4 : 2); i++) {
+      spawnSmashParticle(pieceSprite, 0.5, 0.64, inRhythm ? 0.44 : 0.3);
+    }
+
+    spawnSmashParticle("smash_impact", 0.5, 0.55, 0.2);
+    if (ps.smooth > 2) spawnSmashParticle("smash_splat_2", 0.48 + Math.random() * 0.04, 0.66, 0.1);
+  }
+
+  function expectedComboCode(step) {
+    const ps = game.processMini;
+    if (!ps.active) initComboStep(step);
+    if (ps.cueCode) return ps.cueCode;
+
+    if (!ps.seq.length) return QWER_CODES[Math.floor(Math.random() * 4)];
+    return ps.seq[Math.min(ps.index, ps.seq.length - 1)];
+  }
+
+  function comboMiss(mode, text) {
+    game.processMini.streak = 0;
+    if (mode === "smash") game.processMini.spill = Math.min(1, game.processMini.spill + 0.45);
+    if (mode === "sizzle") game.processMini.smoke = Math.min(1, game.processMini.smoke + 0.6);
+    if (mode === "stir") game.processMini.burn = Math.min(1, game.processMini.burn + 0.55);
+    if (mode === "plate") game.processMini.spill = Math.min(1, game.processMini.spill + 0.35);
+
+    game.processMini.timeLeft = Math.max(0.25, game.processMini.timeLeft - 0.4);
+    setProcessFx(text || "MISS");
+    applyPenalty("wrongInput");
+  }
+
+  function updateSecretCombo(code) {
+    const ps = game.processMini;
+    const expected = ps.secretCombo[ps.secretIndex];
+    if (code === expected) {
+      ps.secretIndex++;
+      if (ps.secretIndex >= ps.secretCombo.length) {
+        ps.secretIndex = 0;
+        game.score += 450;
+        game.flavorMeter = Math.min(1, game.flavorMeter + 0.2);
+        setAlert("SECRET RHYTHM! BONUS +450", "rgba(255, 224, 102, 0.98)", 0.95);
+        updateHUD();
+      }
+    } else {
+      ps.secretIndex = code === ps.secretCombo[0] ? 1 : 0;
+    }
+  }
+
+  function handleComboKey(code, step) {
+    if (!game.processMini.active) initComboStep(step);
+    const ps = game.processMini;
+    const mode = ps.mode;
+
+    if (mode === "stir" && game.step3?.finishAnim) return;
+
+    const expected = expectedComboCode(step);
+    const now = performance.now();
+    const dt = ps.lastHitAt ? (now - ps.lastHitAt) / 1000 : ps.beatWindow;
+    const inRhythm = dt <= ps.beatWindow;
+
+    if (code !== expected) {
+      // Keep sequence progress (index/beats) intact on wrong input.
+      comboMiss(mode, mode === "sizzle" ? "OVERFRY!" : "MISSED BEAT!");
+      if (mode === "sizzle") setAlert("SMOKE CLOUD!", "rgba(255, 89, 94, 0.92)", 0.7);
       return;
     }
 
-    setAlert("DISH COMPLETE!", "rgba(128, 255, 114, 0.92)", 0.9);
-    loadDish();
-    updateHUD();
+    ps.lastHitAt = now;
+    ps.beats++;
+    ps.index = Math.min(ps.seq.length, ps.index + 1);
+    ps.streak++;
+    ps.bestStreak = Math.max(ps.bestStreak, ps.streak);
+    ps.smooth = Math.max(-4, Math.min(10, ps.smooth + (inRhythm ? 1 : -0.5)));
+    ps.aroma = Math.min(1, ps.aroma + (mode === "sizzle" ? 0.1 : 0.04));
+    game.flavorMeter = Math.min(1, game.flavorMeter + (inRhythm ? 0.03 : 0.015));
+
+    awardStepPoints(0.3 + (inRhythm ? 0.15 : 0));
+    updateSecretCombo(code);
+
+    if (mode === "sizzle") {
+      const fxMap = {
+        KeyW: "Garlic Sizzle",
+        KeyE: "Chili Pop",
+        KeyR: "Ginger Aroma",
+        KeyQ: "Flame Flicker"
+      };
+      setProcessFx(fxMap[code] || "Sizzle");
+    } else if (mode === "smash") {
+      triggerSmashFx(code, inRhythm);
+      setProcessFx(inRhythm ? "Smooth Paste" : "Lumpy Paste");
+    } else if (mode === "stir") {
+      setProcessFx("Juicy Stir");
+    } else {
+      setProcessFx("Plating Flow");
+    }
+
+    if (ps.cueCode) {
+      ps.cueCode = null;
+      ps.cueT = 0;
+      game.score += 120;
+      setAlert("CUE HIT!", "rgba(128, 255, 114, 0.92)", 0.45);
+      updateHUD();
+    }
+
+    if (mode === "stir" && ps.cueEvery > 0 && ps.beats % ps.cueEvery === 0 && !ps.cueCode) {
+      ps.cueCode = QWER_CODES[Math.floor(Math.random() * 4)];
+      ps.cueT = ps.cueWindow;
+      setAlert("REACT CUE!", "rgba(255, 224, 102, 0.95)", 0.45);
+    }
+
+    if (step.perfectPowerUp && ps.beats >= 8 && ps.streak >= 8 && ps.smooth >= 6 && !ps.perfectPower) {
+      ps.perfectPower = true;
+      ps.beats = ps.target;
+      game.score += 300;
+      game.flavorMeter = Math.min(1, game.flavorMeter + 0.12);
+      setAlert("POWER-UP: PERFECT PASTE!", "rgba(128, 255, 114, 0.95)", 0.9);
+      updateHUD();
+    }
+
+    if (mode === "plate" && ps.beats >= ps.target && dt <= (Number(step.rhythmWindow) || 0.3)) {
+      ps.flairBonus = true;
+      game.score += 250;
+      setAlert("FLAIR PLATING +250", "rgba(128, 255, 114, 0.95)", 0.8);
+      updateHUD();
+    }
+
+    if (ps.sequenceLen > 0 && ps.index >= ps.sequenceLen) {
+      ps.sequencesDone = Math.min(ps.sequencesNeed, (ps.sequencesDone | 0) + 1);
+      ps.index = 0;
+      ps.seq = generateComboSequence({
+        ...step,
+        targetBeats: ps.sequenceLen,
+        comboMode: mode
+      });
+      setAlert(`SEQUENCE ${ps.sequencesDone}/${ps.sequencesNeed} COMPLETE`, "rgba(128, 255, 114, 0.92)", 0.55);
+    }
+
+    if (ps.sequencesNeed > 1) {
+      const partial = ps.sequenceLen > 0 ? (ps.index / ps.sequenceLen) : 0;
+      game.stepProgress = Math.max(0, Math.min(1, (ps.sequencesDone + partial) / Math.max(1, ps.sequencesNeed)));
+    } else {
+      game.stepProgress = Math.max(0, Math.min(1, ps.beats / Math.max(1, ps.target)));
+    }
+
+    const sequenceGoalMet = ps.sequencesNeed > 1
+      ? (ps.sequencesDone >= ps.sequencesNeed)
+      : (ps.beats >= ps.target);
+
+    if (sequenceGoalMet) {
+      if (mode === "stir" && shouldRunStep3GameplayFlow()) {
+        game.step3.finishAnim = true;
+        game.step3.finishTimer = 1.15;
+        game.score += 220;
+        updateHUD();
+        setAlert("STIR COMPLETE!", "rgba(128, 255, 114, 0.95)", 0.8);
+        return;
+      }
+
+      if (step.allowMasterChef && game.flavorMeter >= 0.95 && ps.bestStreak >= 7) {
+        ps.masterChef = true;
+        game.score += 600;
+        setAlert("PERANAKAN MASTER CHEF!", "rgba(128, 255, 114, 0.95)", 1.0);
+        updateHUD();
+      } else {
+        setAlert("PROCESS COMPLETE!", "rgba(128, 255, 114, 0.92)", 0.7);
+      }
+      advanceStep();
+    }
+  }
+
+  function ensureCookSeqReady(step) {
+    if (!step || step.type !== "cook") return;
+    if (game.cookSeq.length > 0) return;
+
+    const seq = generateCookSeq();
+    game.cookSeq = seq;
+    game.cookSeqIndex = 0;
+    game.cookIconsDone = seq.map(() => false);
+    game.cookIconJitter = seq.map(() => 0);
+
+    setAlert("COOK: match the icons (QWER)", "rgba(255, 224, 102, 0.95)", 0.9);
   }
 
   function advanceStep() {
@@ -263,10 +1452,26 @@ export function createGame({ canvas, startBtn, restartBtn, hud }) {
       return;
     }
 
+    if (shouldRunStep2Flow()) {
+      startStep2Flow();
+      return;
+    }
+
+    if (shouldRunStep3IntroFlow()) {
+      startStep3Intro();
+      return;
+    }
+
+    if (shouldRunStep4IntroFlow()) {
+      startStep4Intro();
+      return;
+    }
+
     const step = currentStep();
     if (step) {
-      if (step.type === "serve") setAlert("SERVE NOW: ENTER", "rgba(128, 255, 114, 0.92)", 0.9);
-      else if (step.type === "cook") setAlert("COOKING...", "rgba(255, 224, 102, 0.90)", 0.75);
+      if (step.type === "serve") setAlert("SERVE: press GREEN BUTTON", "rgba(128, 255, 114, 0.92)", 0.9);
+      else if (step.type === "cook") setAlert("COOK: match the icons (QWER)", "rgba(255, 224, 102, 0.90)", 0.9);
+      else if (step.type === "combo") setAlert(`${step.process || "COMBO PROCESS"}`, "rgba(255, 224, 102, 0.90)", 0.9);
       else setAlert(`NEXT: ${step.label}`, "rgba(255, 224, 102, 0.90)", 0.9);
     }
   }
@@ -283,7 +1488,6 @@ export function createGame({ canvas, startBtn, restartBtn, hud }) {
     if (game.scan.messageT > 0) {
       game.scan.messageT = Math.max(0, game.scan.messageT - dt);
       if (game.scan.messageT === 0) {
-        game.scan.message = "Enter ingredient ID";
         game.scan.messageColor = "#d7d7d7";
         game.scan.inputColor = "rgba(255,255,255,0.35)";
       }
@@ -291,13 +1495,12 @@ export function createGame({ canvas, startBtn, restartBtn, hud }) {
   }
 
   function startGame(selectedDish) {
-    game.uniqueDishesCompleted = new Set();
-    game.dishesToWin = dishes.length;
-
+    heldCodes.clear();
     game.score = 0;
     game.combo = 0;
     game.time = 180;
     game.state = "playing";
+    game.endRecorded = false;
 
     startBtn.style.display = "none";
     restartBtn.style.display = "block";
@@ -314,23 +1517,26 @@ export function createGame({ canvas, startBtn, restartBtn, hud }) {
     }, 1000);
   }
 
-  /* ================= COUNT HELPERS ================= */
   function getNeededForStep(step, ing) {
     if (!step) return 0;
     if (step.counts && step.counts[ing] != null) return Math.max(0, Number(step.counts[ing]) || 0);
     return 0;
   }
+
   function getDoneForStep(step, ing) {
     if (!step || !step._doneCounts) return 0;
     return Math.max(0, Number(step._doneCounts[ing]) || 0);
   }
+
   function incDoneForStep(step, ing) {
     if (!step._doneCounts) step._doneCounts = {};
     step._doneCounts[ing] = (step._doneCounts[ing] || 0) + 1;
 
     if (!game.ingCounts[ing]) game.ingCounts[ing] = { done: 0, need: 0 };
-    game.ingCounts[ing].done = Math.min(game.ingCounts[ing].need || Infinity, (game.ingCounts[ing].done || 0) + 1);
+    const need = game.ingCounts[ing].need;
+    game.ingCounts[ing].done = Math.min(need || Infinity, (game.ingCounts[ing].done || 0) + 1);
   }
+
   function stepIsComplete(step) {
     if (!step) return false;
     if (step.type !== "prep" && step.type !== "action") return false;
@@ -343,50 +1549,185 @@ export function createGame({ canvas, startBtn, restartBtn, hud }) {
     return true;
   }
 
-  /* ================= INPUT HELPERS ================= */
   function ingredientForKeyIndex(index) {
     return game.keyMap[index];
   }
+
   function keyLabelForIngredient(ing) {
     const idx = game.keyMap.indexOf(ing);
     return idx >= 0 ? keyLabels[idx] : "?";
   }
 
-  function handlePrepOrActionPress(pressedIngredient) {
-    const step = currentStep();
-    if (!step) return;
+  function pulseKeyGlow(code) {
+    if (!game.keyGlow || !Object.prototype.hasOwnProperty.call(game.keyGlow, code)) return;
+    game.keyGlow[code] = 0.22;
+  }
 
-    const allowed = step.uses || [];
-    if (allowed.length > 0 && !allowed.includes(pressedIngredient)) {
-      applyPenalty("wrongInput");
-      return;
-    }
-
-    const need = getNeededForStep(step, pressedIngredient);
-    if (need <= 0) {
-      applyPenalty("wrongInput");
-      return;
-    }
-
-    const done = getDoneForStep(step, pressedIngredient);
-    if (done >= need) {
-      applyPenalty("wrongInput");
-      setAlert("TOO MANY OF THAT INGREDIENT", "rgba(255, 89, 94, 0.92)", 0.8);
-      return;
-    }
-
-    incDoneForStep(step, pressedIngredient);
-    awardStepPoints(step.type === "prep" ? 0.40 : 0.55);
-
-    if (stepIsComplete(step)) {
-      setAlert("STEP COMPLETE!", "rgba(128, 255, 114, 0.92)", 0.7);
-      awardStepPoints(1.1);
-      advanceStep();
+  function updateKeyGlow(dt) {
+    if (!game.keyGlow) return;
+    for (const k of Object.keys(game.keyGlow)) {
+      game.keyGlow[k] = Math.max(0, Number(game.keyGlow[k] || 0) - dt);
     }
   }
 
-  /* ================= INPUT ================= */
+  function buildBottomPreview() {
+    const codeToLabel = { KeyQ: "Q", KeyW: "W", KeyE: "E", KeyR: "R" };
+    const toLabel = (code) => codeToLabel[code] || "?";
+
+    if (game.step2?.active && !game.step2?.intro) {
+      const seq = Array.isArray(game.step2.comboSeq) ? game.step2.comboSeq : [];
+      return { label: "Sequence Preview", keys: seq.map(toLabel), index: game.step2.comboIndex | 0 };
+    }
+
+    const step = currentStep();
+    if (!step) return null;
+
+    if (step.type === "cook") {
+      const seq = Array.isArray(game.cookSeq) ? game.cookSeq : [];
+      return { label: "Sequence Preview", keys: seq.map(toLabel), index: game.cookSeqIndex | 0 };
+    }
+
+    if (step.type === "combo") {
+      const ps = game.processMini || {};
+      const seq = Array.isArray(ps.seq) ? ps.seq : [];
+      const index = Math.max(0, ps.index | 0);
+      const window = seq.slice(index, index + 6).map(toLabel);
+      return { label: "Sequence Preview", keys: window, index: 0 };
+    }
+
+    if (step.type === "serve") {
+      return { label: "Sequence Preview", keys: ["W"], index: 0 };
+    }
+
+    if (step.type === "prep" || step.type === "action") {
+      const uses = (step.uses && step.uses.length ? step.uses : game.sequence).slice(0, 4);
+      const keys = uses.map((ing) => String(keyLabelForIngredient(ing) || "?"));
+      return { label: "Ingredient Keys", keys, index: -1 };
+    }
+
+    return null;
+  }
+
+  async function enterDishSelectFromMenu() {
+    if (menuStartPending) return;
+    menuStartPending = true;
+    try {
+      await ensureAudio();
+      if (!assetsLoaded) {
+        startBtn.textContent = "LOADING...";
+        await loadAssets();
+        assetsLoaded = true;
+        startBtn.textContent = "START GAME";
+      }
+      pickDishOptions();
+      game.state = "dish-select";
+      startBtn.style.display = "none";
+      restartBtn.style.display = "none";
+    } finally {
+      menuStartPending = false;
+    }
+  }
+
+function handlePrepOrActionPress(pressedIngredient) {
+  const step = currentStep();
+  if (!step) return;
+
+  const allowed = step.uses || [];
+  if (allowed.length > 0 && !allowed.includes(pressedIngredient)) {
+    applyPenalty("wrongInput");
+    return;
+  }
+
+  const need = getNeededForStep(step, pressedIngredient);
+  if (need <= 0) {
+    applyPenalty("wrongInput");
+    return;
+  }
+
+  const done = getDoneForStep(step, pressedIngredient);
+  if (done >= need) {
+    applyPenalty("wrongInput");
+    setAlert("TOO MANY OF THAT INGREDIENT", "rgba(255, 89, 94, 0.92)", 0.8);
+    return;
+  }
+
+  // SUCCESS: count it
+  incDoneForStep(step, pressedIngredient);
+
+  // ENHANCEMENT: also place icon on plate
+  if (!Array.isArray(game.plateIcons)) game.plateIcons = [];
+  game.plateIcons.push({ ing: pressedIngredient, t: performance.now() }); // [web:224]
+  if (game.plateIcons.length > 24) game.plateIcons.shift();
+
+  awardStepPoints(step.type === "prep" ? 0.40 : 0.55);
+
+  if (stepIsComplete(step)) {
+    setAlert("STEP COMPLETE!", "rgba(128, 255, 114, 0.92)", 0.7);
+    awardStepPoints(1.1);
+    advanceStep();
+  }
+}
+
+
+  function triggerCookIconJitter(i) {
+    if (!Array.isArray(game.cookIconJitter)) return;
+    if (i < 0 || i >= game.cookIconJitter.length) return;
+    game.cookIconJitter[i] = 0.25;
+  }
+
+  function handleCookKey(code, step) {
+    ensureCookSeqReady(step);
+
+    const expected = game.cookSeq[game.cookSeqIndex];
+    if (!expected) return;
+
+    if (code === expected) {
+      game.cookIconsDone[game.cookSeqIndex] = true;
+      game.cookSeqIndex++;
+      playBeep(660, 0.05);
+
+      if (game.cookSeqIndex >= game.cookSeq.length) {
+        game.cookCombosDone++;
+        awardStepPoints(1.15);
+        setAlert("COOK COMBO COMPLETE!", "rgba(128, 255, 114, 0.92)", 0.7);
+
+        const chunk = 1 / Math.max(1, game.cookCombosNeed);
+        game.stepProgress = Math.min(1, game.stepProgress + chunk);
+
+        resetCookIcons();
+        ensureCookSeqReady(step);
+      }
+    } else {
+      triggerCookIconJitter(game.cookSeqIndex);
+      applyPenalty("wrongStir");
+      game.cookSeqIndex = 0;
+      game.cookIconsDone = game.cookIconsDone.map(() => false);
+    }
+  }
+
   function onKeyDown(e) {
+    heldCodes.add(e.code);
+    if (game.state === "win" || game.state === "gameover") {
+      if (e.repeat) return;
+      if (e.code === "KeyQ") {
+        e.preventDefault();
+        game.state = "menu";
+        startBtn.style.display = "none";
+        restartBtn.style.display = "none";
+      }
+      return;
+    }
+
+    if (game.state === "menu") {
+      if (e.repeat) return;
+      if (e.code === "KeyQ") {
+        e.preventDefault();
+        pulseKeyGlow("KeyQ");
+        void enterDishSelectFromMenu();
+      }
+      return;
+    }
+
     if (game.state === "scan") {
       const key = String(e.key);
 
@@ -428,7 +1769,6 @@ export function createGame({ canvas, startBtn, restartBtn, hud }) {
       if (/^\d$/.test(key)) {
         if (game.scan.input.length < 4) game.scan.input += key;
       }
-
       return;
     }
 
@@ -436,75 +1776,111 @@ export function createGame({ canvas, startBtn, restartBtn, hud }) {
       const key = String(e.key).toUpperCase();
       const idx = keyLabels.indexOf(key);
       if (idx !== -1 && dishOptions[idx]) {
-        startScan(dishOptions[idx]);
+        if (testMode) startGame(dishOptions[idx]);
+        else startScan(dishOptions[idx]);
       }
       return;
     }
 
     if (game.state !== "playing") return;
-
-    const key = String(e.key);
-    const isSpace = (key === " " || key === "Spacebar");
-    const isEnter = (key === "Enter");
-
-    if (isSpace) game.spaceHeld = true;
+    if (game.step1.active) {
+      if (e.repeat) return;
+      const step1Code = e.code;
+      if (!QWER_CODES.includes(step1Code)) return;
+      e.preventDefault();
+      pulseKeyGlow(step1Code);
+      handleStep1Key(step1Code);
+      return;
+    }
+    if (game.step2.active) {
+      if (e.repeat || game.step2.intro) return;
+      const step2Code = e.code;
+      if (!QWER_CODES.includes(step2Code)) return;
+      e.preventDefault();
+      pulseKeyGlow(step2Code);
+      handleStep2ComboKey(step2Code);
+      return;
+    }
+    if (game.step4.active) {
+      if (e.repeat) return;
+      if (!QWER_CODES.includes(e.code)) return;
+      e.preventDefault();
+      pulseKeyGlow(e.code);
+      handleStep4Key(e.code);
+      return;
+    }
+    if (shouldRunStep3GameplayFlow() && game.step3.active) {
+      if (e.repeat) return;
+      if (!QWER_CODES.includes(e.code)) return;
+      e.preventDefault();
+      pulseKeyGlow(e.code);
+      handleStep3TimingKey(e.code);
+      return;
+    }
+    if (game.step3Intro.active) return;
+    if (game.step4Intro.active) return;
     if (game.dishCountdown > 0) return;
-    if (e.repeat && !isSpace) return;
+    if (e.repeat) return;
 
+    const code = e.code;
     const step = currentStep();
     if (!step) return;
 
+    const qwerIndex = QWER_CODES.indexOf(code);
+    if (qwerIndex === -1) return;
+
+    e.preventDefault();
+    pulseKeyGlow(code);
+
     if (step.type === "serve") {
-      if (isEnter) {
+      if (code === "KeyW") {
         awardStepPoints(1.0);
         setAlert("SERVED!", "rgba(128, 255, 114, 0.92)", 0.55);
         advanceStep();
       } else {
         applyPenalty("wrongEnter");
-        setAlert("PRESS ENTER TO SERVE", "rgba(255, 89, 94, 0.92)", 0.75);
+        setAlert("SERVE = GREEN BUTTON", "rgba(255, 89, 94, 0.92)", 0.75);
       }
       return;
     }
 
     if (step.type === "cook") {
-      if (isEnter) {
-        applyPenalty("wrongEnter");
-        setAlert("NO ENTER — SERVE LATER", "rgba(255, 89, 94, 0.92)", 0.7);
-        return;
-      }
-
-      const idx = keyLabels.indexOf(String(key).toUpperCase());
-      if (idx !== -1) {
-        applyPenalty("wrongInput");
-        setAlert("COOKING... NO INGREDIENTS", "rgba(255, 89, 94, 0.92)", 0.75);
-      }
+      handleCookKey(code, step);
       return;
     }
 
-    const index = keyLabels.indexOf(String(key).toUpperCase());
-    if (index === -1) return;
+    if (step.type === "combo") {
+      handleComboKey(code, step);
+      return;
+    }
 
-    const pressedIngredient = ingredientForKeyIndex(index);
-    if (step.type === "prep" || step.type === "action") handlePrepOrActionPress(pressedIngredient);
+    if (step.type === "prep" || step.type === "action") {
+      const pressedIngredient = ingredientForKeyIndex(qwerIndex);
+      handlePrepOrActionPress(pressedIngredient);
+    }
   }
 
   function onKeyUp(e) {
-    const key = String(e.key);
-    const isSpace = (key === " " || key === "Spacebar");
-    if (isSpace) game.spaceHeld = false;
+    heldCodes.delete(e.code);
+    if (game.state !== "playing") return;
+    if (!game.step1.active || game.step1.intro) return;
+    if (game.step1.phase !== "scoop") return;
+    if (e.code === "KeyW" || e.code === "KeyE") {
+      game.step1.scoopHolding = heldCodes.has("KeyW") && heldCodes.has("KeyE");
+    }
   }
 
   document.addEventListener("keydown", onKeyDown);
   document.addEventListener("keyup", onKeyUp);
 
   function onCanvasClick(e) {
-    if (game.state !== "dish-select") return;
-
     const rect = canvas.getBoundingClientRect();
     const scaleX = canvas.width / rect.width;
     const scaleY = canvas.height / rect.height;
     const x = (e.clientX - rect.left) * scaleX;
     const y = (e.clientY - rect.top) * scaleY;
+
+    if (game.state !== "dish-select") return;
 
     const count = Math.min(4, dishOptions.length);
     if (count === 0) return;
@@ -521,7 +1897,8 @@ export function createGame({ canvas, startBtn, restartBtn, hud }) {
       const cy = startY;
       const inside = x >= cx && x <= cx + cardW && y >= cy && y <= cy + cardH;
       if (inside && dishOptions[i]) {
-        startScan(dishOptions[i]);
+        if (testMode) startGame(dishOptions[i]);
+        else startScan(dishOptions[i]);
         return;
       }
     }
@@ -529,9 +1906,7 @@ export function createGame({ canvas, startBtn, restartBtn, hud }) {
 
   canvas.addEventListener("click", onCanvasClick);
 
-  /* ================= COUNTDOWN UPDATE ================= */
   let dishCountdownAccum = 0;
-
   function updateDishCountdown(dt) {
     if (game.dishCountdown <= 0) return;
     dishCountdownAccum += dt;
@@ -550,37 +1925,22 @@ export function createGame({ canvas, startBtn, restartBtn, hud }) {
     }
   }
 
-  /* ================= COOK UPDATE ================= */
   function updateCookStep(dt) {
     const step = currentStep();
     if (!step || step.type !== "cook") return;
 
+    ensureCookSeqReady(step);
+
+    for (let i = 0; i < game.cookIconJitter.length; i++) {
+      if (game.cookIconJitter[i] > 0) game.cookIconJitter[i] = Math.max(0, game.cookIconJitter[i] - dt);
+    }
+
     const denom = Math.max(0.2, step.time || 1);
     game.stepProgress += dt / denom;
 
-    const win = step.stirPerfectWindow;
-    if (win) {
-      const p = game.stepProgress;
-      const inside = (p >= win[0] && p <= win[1]);
-
-      if (!game.stirredThisStep && game.spaceHeld && inside) {
-        game.stirredThisStep = true;
-        awardStepPoints(1.2);
-        playBeep(660);
-        setAlert("PERFECT STIR!", "rgba(128, 255, 114, 0.92)", 0.5);
-      }
-
-      if (!game.stirredThisStep && !game.missedStirThisStep && p > win[1]) {
-        game.missedStirThisStep = true;
-        applyPenalty("wrongStir");
-        setAlert("MISSED STIR!", "rgba(255, 89, 94, 0.92)", 0.7);
-      }
-    } else {
-      if (game.spaceHeld && game.stepProgress < 1) {
-        applyPenalty("wrongStir");
-        setAlert("NO STIR NEEDED", "rgba(255, 89, 94, 0.92)", 0.55);
-        game.spaceHeld = false;
-      }
+    if (game.stepProgress >= 1 && game.cookCombosDone < game.cookCombosNeed) {
+      applyPenalty("wrongStir");
+      setAlert("COOK FAILED!", "rgba(255, 89, 94, 0.92)", 0.8);
     }
 
     if (game.stepProgress >= 1) {
@@ -589,7 +1949,45 @@ export function createGame({ canvas, startBtn, restartBtn, hud }) {
     }
   }
 
-  /* ================= SHAKE UPDATE ================= */
+  function updateComboStep(dt) {
+    const step = currentStep();
+    if (!step || step.type !== "combo") return;
+    if (!game.processMini.active) initComboStep(step);
+
+    const ps = game.processMini;
+    ps.timeLeft = Math.max(0, ps.timeLeft - dt);
+    ps.smoke = Math.max(0, ps.smoke - dt * 0.45);
+    ps.spill = Math.max(0, ps.spill - dt * 0.9);
+    ps.burn = Math.max(0, ps.burn - dt * 0.55);
+    ps.smashPulse = Math.max(0, (ps.smashPulse || 0) - dt * 2.3);
+    if (ps.effectT > 0) ps.effectT = Math.max(0, ps.effectT - dt);
+
+    if (Array.isArray(ps.smashParticles) && ps.smashParticles.length) {
+      for (let i = ps.smashParticles.length - 1; i >= 0; i--) {
+        const p = ps.smashParticles[i];
+        p.life -= dt;
+        p.xN += p.vx * dt;
+        p.yN += p.vy * dt;
+        p.vy += 0.5 * dt;
+        p.rot += p.vr * dt;
+        if (p.life <= 0 || p.xN < -0.2 || p.xN > 1.2 || p.yN > 1.3) ps.smashParticles.splice(i, 1);
+      }
+    }
+
+    if (ps.cueT > 0) {
+      ps.cueT = Math.max(0, ps.cueT - dt);
+      if (ps.cueT <= 0 && ps.cueCode) {
+        ps.cueCode = null;
+        comboMiss(ps.mode, "MISSED CUE!");
+      }
+    }
+
+    if (ps.timeLeft <= 0) {
+      comboMiss(ps.mode, "TIME SLIP!");
+      ps.timeLeft = 1.2;
+    }
+  }
+
   function updateShake(dt) {
     if (game.shake > 0) game.shake = Math.max(0, game.shake - 0.8);
 
@@ -603,30 +2001,52 @@ export function createGame({ canvas, startBtn, restartBtn, hud }) {
     }
   }
 
-  /* ================= LOOP ================= */
   function loop(ts) {
     if (lastFrameTs == null) lastFrameTs = ts;
     const dt = Math.min(0.05, (ts - lastFrameTs) / 1000);
     lastFrameTs = ts;
 
     if (game.state === "playing") {
-      updateDishCountdown(dt);
-      updateShake(dt);
-      if (game.dishCountdown <= 0) updateCookStep(dt);
+      updateKeyGlow(dt);
+      if (game.step1.active) {
+        updateStep1(dt);
+      } else if (game.step2.active) {
+        updateStep2(dt);
+      } else if (game.step3Intro.active) {
+        updateStep3Intro(dt);
+        updateShake(dt);
+      } else if (game.step4Intro.active) {
+        updateStep4Intro(dt);
+        updateShake(dt);
+      } else if (game.step4.active) {
+        updateStep4(dt);
+        updateShake(dt);
+      } else {
+        updateDishCountdown(dt);
+        updateShake(dt);
+        if (game.dishCountdown <= 0) {
+          updateCookStep(dt);
+          updateStep3Gameplay(dt);
+          if (!game.step3.finishAnim && !shouldRunStep3GameplayFlow()) updateComboStep(dt);
+        }
+      }
       updateAlert(dt);
     }
 
-    if (game.state === "scan") {
-      updateScanFeedback(dt);
+    if ((game.state === "gameover" || game.state === "win") && !game.endRecorded) {
+      recordScoreToLeaderboard();
+      game.endRecorded = true;
     }
+
+    if (game.state === "scan") updateScanFeedback(dt);
+    if (game.state !== "playing") updateKeyGlow(dt);
 
     ctx.clearRect(0, 0, canvas.width, canvas.height);
     drawBackground(ctx, canvas, assets);
 
     if (game.state === "menu") {
       titleTime += 0.05;
-      drawLanding(ctx, canvas, titleTime);
-      drawTitle(ctx, canvas, titleTime);
+      drawLanding(ctx, canvas, titleTime, assets, game);
     }
 
     if (game.state === "dish-select") {
@@ -638,45 +2058,56 @@ export function createGame({ canvas, startBtn, restartBtn, hud }) {
     }
 
     if (game.state === "playing") {
-      drawDishInfo(ctx, canvas, game);
-      drawHeroAlert(ctx, canvas, alertState);
+      const uiBottomY = drawTopStack(ctx, canvas, game, alertState);
+      const preview = buildBottomPreview();
+      const showBottomButtons = true;
+      const bottomUiTop = showBottomButtons
+        ? drawBottomButtons(ctx, canvas, game, assets, preview)
+        : canvas.height;
+      if (game.step1.active) {
+        if (game.step1.intro) drawStep1Intro(ctx, canvas, game.step1, assets);
+        else drawStep1Gameplay(ctx, canvas, game.step1, assets);
+      } else if (game.step2.active) {
+        if (game.step2.intro) drawStep2Intro(ctx, canvas, game.step2, assets);
+        else drawStep2Gameplay(ctx, canvas, game.step2, assets);
+      } else if (game.step3Intro.active) {
+        drawStep3Intro(ctx, canvas, game.step3Intro, assets);
+      } else if (game.step4Intro.active) {
+        drawStep4Intro(ctx, canvas, game.step4Intro, assets);
+      } else if (game.step4.active) {
+        drawStep4Gameplay(ctx, canvas, game, assets, uiBottomY, bottomUiTop);
+      } else if (shouldRunStep3GameplayFlow()) {
+        drawStep3Gameplay(ctx, canvas, game, assets, uiBottomY, bottomUiTop);
+      } else {
+        let y = uiBottomY;
+        y += drawComboFlames(ctx, canvas, game, y) + 10;
+        y += drawTopSequencePreview(ctx, canvas, assets, preview, y) + 10;
 
-      if (game.shake > 0) game.shake--;
+        if (game.shake > 0) game.shake--;
 
-      drawPlate(ctx, canvas, game, assets);
-      drawComboFlames(ctx, canvas, game);
+        drawPlate(ctx, canvas, game, assets, y);
 
-      drawInstructions(ctx, canvas, game, {
-        currentStep,
-        getNeededForStep,
-        getDoneForStep,
-        keyLabelForIngredient
-      });
+        drawProcessOverlay(ctx, canvas, game, assets);
+
+        drawInstructions(ctx, canvas, game, {
+          currentStep,
+          getNeededForStep,
+          getDoneForStep,
+          keyLabelForIngredient,
+          assets,
+          bottomUiTop
+        });
+      }
     }
 
-    if (game.state === "gameover") drawGameOver(ctx, canvas);
-    if (game.state === "win") drawWin(ctx, canvas);
+    if (game.state === "gameover") drawGameOver(ctx, canvas, game, assets);
+    if (game.state === "win") drawWin(ctx, canvas, game, assets);
 
     requestAnimationFrame(loop);
   }
 
-  /* ================= PUBLIC API ================= */
   return {
-    async onStartClick() {
-      await ensureAudio();
-
-      if (!assetsLoaded) {
-        startBtn.textContent = "LOADING...";
-        await loadAssets();
-        assetsLoaded = true;
-        startBtn.textContent = "START GAME";
-      }
-
-      pickDishOptions();
-      game.state = "dish-select";
-      startBtn.style.display = "none";
-      restartBtn.style.display = "none";
-    },
+    async onStartClick() { await enterDishSelectFromMenu(); },
     restart() {
       pickDishOptions();
       game.state = "dish-select";
