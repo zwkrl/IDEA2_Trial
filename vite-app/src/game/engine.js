@@ -8,8 +8,9 @@ import {
   drawPlate,
   drawProcessOverlay,
   drawInstructions,
-  drawTitle,
-  drawLanding,
+  drawBottomButtons,
+  drawTopSequencePreview,
+  drawLanding, 
   drawScanScreen,
   drawDishSelect,
   drawGameOver,
@@ -27,8 +28,12 @@ import {
 export function createGame({ canvas, startBtn, restartBtn, hud }) {
   const ctx = canvas.getContext("2d");
   ctx.imageSmoothingEnabled = false;
+  startBtn.style.display = "none";
+  restartBtn.style.display = "none";
 
   const QWER_CODES = ["KeyQ", "KeyW", "KeyE", "KeyR"];
+  const LEADERBOARD_KEY = "frantic-heritage-cooking.leaderboard.v1";
+  const heldCodes = new Set();
 
   // Testing bypass (?test=true) [web:58]
   const urlParams = new URLSearchParams(window.location.search);
@@ -64,6 +69,7 @@ export function createGame({ canvas, startBtn, restartBtn, hud }) {
     const baseLoads = [
       loadImage("bg", "/assets/background/kitchen.png"),
       loadImage("plate", "/assets/ui/plate.png"),
+      loadImage("main_logo", "/assets/ui/main_logo.png"),
       loadImage("chicken", "/assets/ingredients/chicken.png"),
       loadImage("pork", "/assets/ingredients/pork.png"),
       loadImage("garlic", "/assets/ingredients/garlic.png"),
@@ -72,6 +78,10 @@ export function createGame({ canvas, startBtn, restartBtn, hud }) {
       loadImage("shrimp", "/assets/ingredients/shrimp.png"),
       loadImage("coconut", "/assets/ingredients/coconut.png"),
       loadImage("rice", "/assets/ingredients/rice.png"),
+      loadImage("btn_q", "/assets/ui/blue-btn.png"),
+      loadImage("btn_w", "/assets/ui/green-btn.png"),
+      loadImage("btn_e", "/assets/ui/yellow-btn.png"),
+      loadImage("btn_r", "/assets/ui/white-btn.png"),
       loadImageVariants("smash_pestle", [
         "/assets/process1/pestle.png",
         "/assets/process1/pestle (1).png"
@@ -155,14 +165,21 @@ export function createGame({ canvas, startBtn, restartBtn, hud }) {
     await Promise.all([...baseLoads, ...dishLoads]);
   }
 
+  // Preload title/menu visuals so landing UI is visible before starting.
+  void Promise.all([
+    loadImage("bg", "/assets/background/kitchen.png"),
+    loadImage("main_logo", "/assets/ui/main_logo.png"),
+    loadImage("btn_q", "/assets/ui/blue-btn.png"),
+    loadImage("btn_w", "/assets/ui/green-btn.png"),
+    loadImage("btn_e", "/assets/ui/yellow-btn.png"),
+    loadImage("btn_r", "/assets/ui/white-btn.png")
+  ]);
+
   const game = {
     state: "menu",
     score: 0,
     combo: 0,
     time: 180,
-
-    uniqueDishesCompleted: new Set(),
-    dishesToWin: dishes.length,
 
     shakeOffsetX: 0,
     shakeOffsetY: 0,
@@ -197,6 +214,9 @@ export function createGame({ canvas, startBtn, restartBtn, hud }) {
       index: 0,
       beats: 0,
       target: 0,
+      sequenceLen: 0,
+      sequencesDone: 0,
+      sequencesNeed: 1,
       streak: 0,
       bestStreak: 0,
       timeLeft: 0,
@@ -259,8 +279,8 @@ export function createGame({ canvas, startBtn, restartBtn, hud }) {
       comboIndex: 0,
       comboLen: 5,
       transitionT: 0,
-      boilTimer: 5,
-      boilDuration: 5
+      boilSpamCount: 0,
+      boilSpamNeed: 20
     },
 
     step3Intro: {
@@ -272,8 +292,12 @@ export function createGame({ canvas, startBtn, restartBtn, hud }) {
     step3: {
       active: false,
       pointer: 0.5,
+      pointerDir: 1,
       sweetMin: 0.42,
       sweetMax: 0.58,
+      targetCode: "KeyW",
+      hitsDone: 0,
+      hitsNeed: 3,
       finishAnim: false,
       finishTimer: 0,
       stirPhase: 0
@@ -287,18 +311,27 @@ export function createGame({ canvas, startBtn, restartBtn, hud }) {
 
     step4: {
       active: false,
-      phase: "timing",
-      pointer: 0.5,
-      pointerDir: 1,
-      sweetMin: 0.44,
-      sweetMax: 0.58,
+      phase: "combo",
+      comboSeq: [],
+      comboIndex: 0,
+      comboLen: 3,
+      timeLeft: 5,
+      duration: 5,
       animT: 0,
       phaseT: 0,
       finalT: 0
     },
 
     shake: 0,
-    dishCountdown: 0
+    dishCountdown: 0,
+    keyGlow: {
+      KeyQ: 0,
+      KeyW: 0,
+      KeyE: 0,
+      KeyR: 0
+    },
+    leaderboard: [],
+    endRecorded: false
   };
 
   game.scan = {
@@ -316,9 +349,50 @@ export function createGame({ canvas, startBtn, restartBtn, hud }) {
   let titleTime = 0;
   let timer = null;
   let assetsLoaded = false;
+  let menuStartPending = false;
   let lastFrameTs = null;
 
   const alertState = { text: "", color: "rgba(255,255,255,0)", ttl: 0 };
+
+  function loadLeaderboard() {
+    try {
+      const raw = localStorage.getItem(LEADERBOARD_KEY);
+      if (!raw) return [];
+      const parsed = JSON.parse(raw);
+      if (!Array.isArray(parsed)) return [];
+      return parsed
+        .map((x) => ({
+          score: Math.max(0, Number(x?.score) || 0),
+          date: String(x?.date || ""),
+          time: String(x?.time || "")
+        }))
+        .sort((a, b) => b.score - a.score)
+        .slice(0, 10);
+    } catch {
+      return [];
+    }
+  }
+
+  function saveLeaderboard(list) {
+    try {
+      localStorage.setItem(LEADERBOARD_KEY, JSON.stringify(list));
+    } catch {
+      // ignore quota/storage errors
+    }
+  }
+
+  function recordScoreToLeaderboard() {
+    const now = new Date();
+    const stampDate = now.toLocaleDateString("en-US", { year: "numeric", month: "short", day: "numeric" });
+    const stampTime = now.toLocaleTimeString("en-US", { hour: "2-digit", minute: "2-digit", hour12: true });
+    const next = [...game.leaderboard, { score: game.score, date: stampDate, time: stampTime }]
+      .sort((a, b) => b.score - a.score)
+      .slice(0, 10);
+    game.leaderboard = next;
+    saveLeaderboard(next);
+  }
+
+  game.leaderboard = loadLeaderboard();
 
   function setAlert(text, color, ttl = 0.85) {
     alertState.text = String(text || "");
@@ -377,6 +451,9 @@ export function createGame({ canvas, startBtn, restartBtn, hud }) {
       index: 0,
       beats: 0,
       target: 0,
+      sequenceLen: 0,
+      sequencesDone: 0,
+      sequencesNeed: 1,
       streak: 0,
       bestStreak: 0,
       timeLeft: 0,
@@ -596,18 +673,17 @@ export function createGame({ canvas, startBtn, restartBtn, hud }) {
         s.scoopFill = 0;
         s.scoopHolding = false;
         s.scoopHold = 0;
-        setAlert("HOLD W TO SCOOP", "rgba(255, 224, 102, 0.95)", 0.7);
+        setAlert("HOLD GREEN+YELLOW TO SCOOP", "rgba(255, 224, 102, 0.95)", 0.7);
       }
       return;
     }
 
     if (s.phase === "scoop") {
-      if (code !== "KeyW") {
-        setAlert("HOLD W TO SCOOP", "rgba(255, 224, 102, 0.95)", 0.6);
+      s.scoopHolding = heldCodes.has("KeyW") && heldCodes.has("KeyE");
+      if (!s.scoopHolding) {
+        setAlert("HOLD GREEN+YELLOW TO SCOOP", "rgba(255, 224, 102, 0.95)", 0.6);
         playBeep(230, 0.03);
-        return;
       }
-      s.scoopHolding = true;
       return;
     }
 
@@ -639,6 +715,7 @@ export function createGame({ canvas, startBtn, restartBtn, hud }) {
     }
 
     if (s.phase === "scoop" && s.scoopStage < s.scoopNeed) {
+      s.scoopHolding = heldCodes.has("KeyW") && heldCodes.has("KeyE");
       if (s.scoopHolding) {
         s.scoopFill = Math.min(1, Number(s.scoopFill || 0) + dt / 1.3);
       } else {
@@ -683,8 +760,8 @@ export function createGame({ canvas, startBtn, restartBtn, hud }) {
       comboIndex: 0,
       comboLen,
       transitionT: 0,
-      boilTimer: 5,
-      boilDuration: 5
+      boilSpamCount: 0,
+      boilSpamNeed: 20
     };
 
     game.dishCountdown = 0;
@@ -709,7 +786,7 @@ export function createGame({ canvas, startBtn, restartBtn, hud }) {
       s.introTimer = Math.max(0, s.introTimer - dt);
       if (s.introTimer <= 0) {
         s.intro = false;
-        setAlert("COMBO TO ADD PASTE (QWER)", "rgba(255, 224, 102, 0.95)", 0.8);
+        setAlert("COMBO TO ADD PASTE", "rgba(255, 224, 102, 0.95)", 0.8);
       }
       return;
     }
@@ -731,15 +808,14 @@ export function createGame({ canvas, startBtn, restartBtn, hud }) {
       if (s.transitionT <= 0) {
         s.addedChicken = true;
         s.phase = "boil";
-        s.boilTimer = s.boilDuration;
-        setAlert("CHICKEN ADDED! BOIL FOR 5s", "rgba(128, 255, 114, 0.92)", 0.85);
+        s.boilSpamCount = 0;
+        setAlert("CHICKEN ADDED! SPAM BUTTONS TO BOIL", "rgba(128, 255, 114, 0.92)", 0.85);
       }
       return;
     }
 
     if (s.phase === "boil") {
-      s.boilTimer = Math.max(0, s.boilTimer - dt);
-      if (s.boilTimer <= 0) {
+      if ((s.boilSpamCount | 0) >= Math.max(1, s.boilSpamNeed | 0)) {
         completeStep2Flow();
       }
     }
@@ -748,6 +824,16 @@ export function createGame({ canvas, startBtn, restartBtn, hud }) {
   function handleStep2ComboKey(code) {
     const s = game.step2;
     if (!s.active || s.intro) return;
+    if (s.phase === "boil") {
+      s.boilSpamCount = Math.min(Math.max(1, s.boilSpamNeed | 0), (s.boilSpamCount | 0) + 1);
+      game.score += 8;
+      updateHUD();
+      playBeep(700 + (s.boilSpamCount % 6) * 20, 0.03);
+      if ((s.boilSpamCount | 0) >= Math.max(1, s.boilSpamNeed | 0)) {
+        setAlert("BOIL COMPLETE!", "rgba(128, 255, 114, 0.92)", 0.65);
+      }
+      return;
+    }
     if (s.phase !== "addPaste" && s.phase !== "addChicken") return;
 
     const expected = s.comboSeq[s.comboIndex];
@@ -793,6 +879,7 @@ export function createGame({ canvas, startBtn, restartBtn, hud }) {
   }
 
   function startStep3Intro() {
+    const targetCode = QWER_CODES[Math.floor(Math.random() * QWER_CODES.length)];
     game.step3Intro = {
       active: true,
       timer: 5,
@@ -802,8 +889,12 @@ export function createGame({ canvas, startBtn, restartBtn, hud }) {
       ...game.step3,
       active: false,
       pointer: 0.5,
+      pointerDir: 1,
       sweetMin: 0.42,
       sweetMax: 0.58,
+      targetCode,
+      hitsDone: 0,
+      hitsNeed: 3,
       finishAnim: false,
       finishTimer: 0,
       stirPhase: 0
@@ -812,6 +903,8 @@ export function createGame({ canvas, startBtn, restartBtn, hud }) {
   }
 
   function startStep4Intro() {
+    const comboLen = 3;
+    const comboSeq = Array.from({ length: comboLen }, () => QWER_CODES[Math.floor(Math.random() * QWER_CODES.length)]);
     game.step4Intro = {
       active: true,
       timer: 5,
@@ -820,11 +913,12 @@ export function createGame({ canvas, startBtn, restartBtn, hud }) {
     game.step4 = {
       ...game.step4,
       active: false,
-      phase: "timing",
-      pointer: 0.5,
-      pointerDir: 1,
-      sweetMin: 0.44,
-      sweetMax: 0.58,
+      phase: "combo",
+      comboSeq,
+      comboIndex: 0,
+      comboLen,
+      timeLeft: 5,
+      duration: 5,
       animT: 0,
       phaseT: 0,
       finalT: 0
@@ -839,8 +933,44 @@ export function createGame({ canvas, startBtn, restartBtn, hud }) {
     if (game.step3Intro.timer <= 0) {
       game.step3Intro.active = false;
       game.step3.active = true;
-      setAlert("STEP 3 START! STIR AT THE RIGHT SPEED", "rgba(128, 255, 114, 0.92)", 0.9);
+      setAlert("STEP 3 START! HIT THE TARGET BUTTON IN THE GREEN ZONE", "rgba(128, 255, 114, 0.92)", 1.0);
     }
+  }
+
+  function handleStep3TimingKey(code) {
+    const s = game.step3;
+    if (!shouldRunStep3GameplayFlow()) return;
+    if (!s.active || s.finishAnim) return;
+
+    const inSweet = s.pointer >= s.sweetMin && s.pointer <= s.sweetMax;
+    const correctCode = code === s.targetCode;
+
+    if (!correctCode) {
+      applyPenalty("wrongInput");
+      setAlert("WRONG BUTTON!", "rgba(255, 89, 94, 0.92)", 0.6);
+      return;
+    }
+
+    if (!inSweet) {
+      applyPenalty("wrongEnter");
+      setAlert("BAD TIMING! PRESS IN GREEN ZONE", "rgba(255, 89, 94, 0.92)", 0.65);
+      return;
+    }
+
+    s.hitsDone += 1;
+    game.score += 90;
+    updateHUD();
+    playBeep(760, 0.07);
+
+    if (s.hitsDone >= s.hitsNeed) {
+      s.finishAnim = true;
+      s.finishTimer = 1.15;
+      setAlert("STIR COMPLETE!", "rgba(128, 255, 114, 0.95)", 0.9);
+      return;
+    }
+
+    s.targetCode = QWER_CODES[Math.floor(Math.random() * QWER_CODES.length)];
+    setAlert(`NICE TIMING! ${s.hitsDone}/${s.hitsNeed}`, "rgba(255, 224, 102, 0.95)", 0.55);
   }
 
   function updateStep4Intro(dt) {
@@ -850,7 +980,7 @@ export function createGame({ canvas, startBtn, restartBtn, hud }) {
     if (game.step4Intro.timer <= 0) {
       game.step4Intro.active = false;
       game.step4.active = true;
-      setAlert("PRESS W IN THE GREEN ZONE", "rgba(128, 255, 114, 0.92)", 0.9);
+      setAlert("COMPLETE 3-BUTTON COMBO IN 5 SECONDS", "rgba(128, 255, 114, 0.92)", 0.9);
     }
   }
 
@@ -866,27 +996,33 @@ export function createGame({ canvas, startBtn, restartBtn, hud }) {
     game.step3.active = false;
     game.step4Intro.active = false;
 
-    game.state = "menu";
+    game.state = "win";
     if (timer) { clearInterval(timer); timer = null; }
-    startBtn.textContent = "START GAME";
-    startBtn.style.display = "block";
+    startBtn.style.display = "none";
     restartBtn.style.display = "none";
   }
 
   function handleStep4Key(code) {
     const s = game.step4;
     if (!s.active) return;
-    if (s.phase !== "timing") return;
-    if (code !== "KeyW") {
-      setAlert("PRESS W IN GREEN ZONE", "rgba(255, 224, 102, 0.95)", 0.5);
-      playBeep(220, 0.03);
+    if (s.phase !== "combo") return;
+    const expected = s.comboSeq[s.comboIndex];
+    if (!expected) return;
+
+    if (code !== expected) {
+      s.comboIndex = 0;
+      applyPenalty("wrongInput");
+      setAlert("WRONG BUTTON! COMBO RESET", "rgba(255, 89, 94, 0.92)", 0.6);
       return;
     }
 
-    const inSweet = s.pointer >= s.sweetMin && s.pointer <= s.sweetMax;
-    if (!inSweet) {
-      applyPenalty("wrongEnter");
-      setAlert("MISSED TIMING! TRY AGAIN", "rgba(255, 89, 94, 0.92)", 0.7);
+    s.comboIndex++;
+    game.score += 20;
+    updateHUD();
+    playBeep(620 + s.comboIndex * 22, 0.045);
+
+    if (s.comboIndex < s.comboSeq.length) {
+      setAlert(`COMBO ${s.comboIndex}/${s.comboSeq.length}`, "rgba(255, 224, 102, 0.95)", 0.45);
       return;
     }
 
@@ -904,14 +1040,13 @@ export function createGame({ canvas, startBtn, restartBtn, hud }) {
 
     s.animT += dt;
 
-    if (s.phase === "timing") {
-      s.pointer += s.pointerDir * dt * 0.95;
-      if (s.pointer >= 1) {
-        s.pointer = 1;
-        s.pointerDir = -1;
-      } else if (s.pointer <= 0) {
-        s.pointer = 0;
-        s.pointerDir = 1;
+    if (s.phase === "combo") {
+      s.timeLeft = Math.max(0, Number(s.timeLeft || 0) - dt);
+      if (s.timeLeft <= 0) {
+        s.comboIndex = 0;
+        s.timeLeft = Number(s.duration || 5);
+        applyPenalty("wrongInput");
+        setAlert("TIME UP! COMBO RESET", "rgba(255, 89, 94, 0.92)", 0.65);
       }
       return;
     }
@@ -946,25 +1081,21 @@ export function createGame({ canvas, startBtn, restartBtn, hud }) {
     if (!shouldRunStep3GameplayFlow()) return;
 
     const s = game.step3;
-    const ps = game.processMini;
     if (!s.active) s.active = true;
 
-    if (s.finishAnim) s.stirPhase += dt * 9.5;
-
-    if (ps && ps.active && !s.finishAnim) {
-      const wobble = Math.sin((ps.beats || 0) * 0.7) * 0.05;
-      const pointer = 0.5 + (Number(ps.smooth || 0) * 0.045) + wobble;
-      s.pointer = Math.max(0, Math.min(1, pointer));
-
-      const inSweet = s.pointer >= s.sweetMin && s.pointer <= s.sweetMax;
-      if (inSweet) {
-        ps.timeLeft = Math.min(Math.max(2, Number(currentStep()?.time || 10)), ps.timeLeft + dt * 0.08);
-      } else {
-        ps.timeLeft = Math.max(0.2, ps.timeLeft - dt * 0.32);
+    if (!s.finishAnim) {
+      s.pointer += s.pointerDir * dt * 0.95;
+      if (s.pointer >= 1) {
+        s.pointer = 1;
+        s.pointerDir = -1;
+      } else if (s.pointer <= 0) {
+        s.pointer = 0;
+        s.pointerDir = 1;
       }
     }
 
     if (s.finishAnim) {
+      s.stirPhase += dt * 9.5;
       s.finishTimer = Math.max(0, s.finishTimer - dt);
       if (s.finishTimer <= 0) {
         s.finishAnim = false;
@@ -1009,24 +1140,11 @@ export function createGame({ canvas, startBtn, restartBtn, hud }) {
   function finishDish() {
     game.score += 1000;
     game.combo += 2;
-
-    if (game.currentDish?.name) game.uniqueDishesCompleted.add(game.currentDish.name);
-
-    if (game.uniqueDishesCompleted.size >= game.dishesToWin) {
-      game.state = "win";
-      setAlert("ALL UNIQUE DISHES COMPLETE!", "rgba(128, 255, 114, 0.92)", 1.2);
-
-      if (timer) { clearInterval(timer); timer = null; }
-
-      startBtn.textContent = "PLAY AGAIN";
-      startBtn.style.display = "block";
-      restartBtn.style.display = "none";
-      updateHUD();
-      return;
-    }
-
-    setAlert("DISH COMPLETE!", "rgba(128, 255, 114, 0.92)", 0.9);
-    loadDish();
+    game.state = "win";
+    setAlert("DISH COMPLETE!", "rgba(128, 255, 114, 0.92)", 1.0);
+    if (timer) { clearInterval(timer); timer = null; }
+    startBtn.style.display = "none";
+    restartBtn.style.display = "none";
     updateHUD();
   }
 
@@ -1073,16 +1191,21 @@ export function createGame({ canvas, startBtn, restartBtn, hud }) {
   function initComboStep(step) {
     const seq = generateComboSequence(step);
     const target = Math.max(1, Number(step.targetBeats) || seq.length || 8);
+    const mode = String(step.comboMode || "smash");
+    const sequencesNeed = mode === "stir" ? 3 : 1;
     const beatWindow = Math.max(0.18, Number(step.beatWindow ?? step.rhythmWindow) || 0.35);
     game.processMini = {
       ...game.processMini,
       active: true,
-      mode: String(step.comboMode || "smash"),
+      mode,
       processName: String(step.process || "Combo Process"),
       seq,
       index: 0,
       beats: 0,
       target,
+      sequenceLen: target,
+      sequencesDone: 0,
+      sequencesNeed,
       streak: 0,
       bestStreak: 0,
       timeLeft: Math.max(2, Number(step.time) || 10),
@@ -1198,6 +1321,7 @@ export function createGame({ canvas, startBtn, restartBtn, hud }) {
     const inRhythm = dt <= ps.beatWindow;
 
     if (code !== expected) {
+      // Keep sequence progress (index/beats) intact on wrong input.
       comboMiss(mode, mode === "sizzle" ? "OVERFRY!" : "MISSED BEAT!");
       if (mode === "sizzle") setAlert("SMOKE CLOUD!", "rgba(255, 89, 94, 0.92)", 0.7);
       return;
@@ -1205,7 +1329,7 @@ export function createGame({ canvas, startBtn, restartBtn, hud }) {
 
     ps.lastHitAt = now;
     ps.beats++;
-    ps.index = Math.min(ps.seq.length - 1, ps.index + 1);
+    ps.index = Math.min(ps.seq.length, ps.index + 1);
     ps.streak++;
     ps.bestStreak = Math.max(ps.bestStreak, ps.streak);
     ps.smooth = Math.max(-4, Math.min(10, ps.smooth + (inRhythm ? 1 : -0.5)));
@@ -1262,9 +1386,29 @@ export function createGame({ canvas, startBtn, restartBtn, hud }) {
       updateHUD();
     }
 
-    game.stepProgress = Math.max(0, Math.min(1, ps.beats / Math.max(1, ps.target)));
+    if (ps.sequenceLen > 0 && ps.index >= ps.sequenceLen) {
+      ps.sequencesDone = Math.min(ps.sequencesNeed, (ps.sequencesDone | 0) + 1);
+      ps.index = 0;
+      ps.seq = generateComboSequence({
+        ...step,
+        targetBeats: ps.sequenceLen,
+        comboMode: mode
+      });
+      setAlert(`SEQUENCE ${ps.sequencesDone}/${ps.sequencesNeed} COMPLETE`, "rgba(128, 255, 114, 0.92)", 0.55);
+    }
 
-    if (ps.beats >= ps.target) {
+    if (ps.sequencesNeed > 1) {
+      const partial = ps.sequenceLen > 0 ? (ps.index / ps.sequenceLen) : 0;
+      game.stepProgress = Math.max(0, Math.min(1, (ps.sequencesDone + partial) / Math.max(1, ps.sequencesNeed)));
+    } else {
+      game.stepProgress = Math.max(0, Math.min(1, ps.beats / Math.max(1, ps.target)));
+    }
+
+    const sequenceGoalMet = ps.sequencesNeed > 1
+      ? (ps.sequencesDone >= ps.sequencesNeed)
+      : (ps.beats >= ps.target);
+
+    if (sequenceGoalMet) {
       if (mode === "stir" && shouldRunStep3GameplayFlow()) {
         game.step3.finishAnim = true;
         game.step3.finishTimer = 1.15;
@@ -1325,7 +1469,7 @@ export function createGame({ canvas, startBtn, restartBtn, hud }) {
 
     const step = currentStep();
     if (step) {
-      if (step.type === "serve") setAlert("SERVE: press W", "rgba(128, 255, 114, 0.92)", 0.9);
+      if (step.type === "serve") setAlert("SERVE: press GREEN BUTTON", "rgba(128, 255, 114, 0.92)", 0.9);
       else if (step.type === "cook") setAlert("COOK: match the icons (QWER)", "rgba(255, 224, 102, 0.90)", 0.9);
       else if (step.type === "combo") setAlert(`${step.process || "COMBO PROCESS"}`, "rgba(255, 224, 102, 0.90)", 0.9);
       else setAlert(`NEXT: ${step.label}`, "rgba(255, 224, 102, 0.90)", 0.9);
@@ -1351,13 +1495,12 @@ export function createGame({ canvas, startBtn, restartBtn, hud }) {
   }
 
   function startGame(selectedDish) {
-    game.uniqueDishesCompleted = new Set();
-    game.dishesToWin = dishes.length;
-
+    heldCodes.clear();
     game.score = 0;
     game.combo = 0;
     game.time = 180;
     game.state = "playing";
+    game.endRecorded = false;
 
     startBtn.style.display = "none";
     restartBtn.style.display = "block";
@@ -1413,6 +1556,76 @@ export function createGame({ canvas, startBtn, restartBtn, hud }) {
   function keyLabelForIngredient(ing) {
     const idx = game.keyMap.indexOf(ing);
     return idx >= 0 ? keyLabels[idx] : "?";
+  }
+
+  function pulseKeyGlow(code) {
+    if (!game.keyGlow || !Object.prototype.hasOwnProperty.call(game.keyGlow, code)) return;
+    game.keyGlow[code] = 0.22;
+  }
+
+  function updateKeyGlow(dt) {
+    if (!game.keyGlow) return;
+    for (const k of Object.keys(game.keyGlow)) {
+      game.keyGlow[k] = Math.max(0, Number(game.keyGlow[k] || 0) - dt);
+    }
+  }
+
+  function buildBottomPreview() {
+    const codeToLabel = { KeyQ: "Q", KeyW: "W", KeyE: "E", KeyR: "R" };
+    const toLabel = (code) => codeToLabel[code] || "?";
+
+    if (game.step2?.active && !game.step2?.intro) {
+      const seq = Array.isArray(game.step2.comboSeq) ? game.step2.comboSeq : [];
+      return { label: "Sequence Preview", keys: seq.map(toLabel), index: game.step2.comboIndex | 0 };
+    }
+
+    const step = currentStep();
+    if (!step) return null;
+
+    if (step.type === "cook") {
+      const seq = Array.isArray(game.cookSeq) ? game.cookSeq : [];
+      return { label: "Sequence Preview", keys: seq.map(toLabel), index: game.cookSeqIndex | 0 };
+    }
+
+    if (step.type === "combo") {
+      const ps = game.processMini || {};
+      const seq = Array.isArray(ps.seq) ? ps.seq : [];
+      const index = Math.max(0, ps.index | 0);
+      const window = seq.slice(index, index + 6).map(toLabel);
+      return { label: "Sequence Preview", keys: window, index: 0 };
+    }
+
+    if (step.type === "serve") {
+      return { label: "Sequence Preview", keys: ["W"], index: 0 };
+    }
+
+    if (step.type === "prep" || step.type === "action") {
+      const uses = (step.uses && step.uses.length ? step.uses : game.sequence).slice(0, 4);
+      const keys = uses.map((ing) => String(keyLabelForIngredient(ing) || "?"));
+      return { label: "Ingredient Keys", keys, index: -1 };
+    }
+
+    return null;
+  }
+
+  async function enterDishSelectFromMenu() {
+    if (menuStartPending) return;
+    menuStartPending = true;
+    try {
+      await ensureAudio();
+      if (!assetsLoaded) {
+        startBtn.textContent = "LOADING...";
+        await loadAssets();
+        assetsLoaded = true;
+        startBtn.textContent = "START GAME";
+      }
+      pickDishOptions();
+      game.state = "dish-select";
+      startBtn.style.display = "none";
+      restartBtn.style.display = "none";
+    } finally {
+      menuStartPending = false;
+    }
   }
 
 function handlePrepOrActionPress(pressedIngredient) {
@@ -1493,6 +1706,28 @@ function handlePrepOrActionPress(pressedIngredient) {
   }
 
   function onKeyDown(e) {
+    heldCodes.add(e.code);
+    if (game.state === "win" || game.state === "gameover") {
+      if (e.repeat) return;
+      if (e.code === "KeyQ") {
+        e.preventDefault();
+        game.state = "menu";
+        startBtn.style.display = "none";
+        restartBtn.style.display = "none";
+      }
+      return;
+    }
+
+    if (game.state === "menu") {
+      if (e.repeat) return;
+      if (e.code === "KeyQ") {
+        e.preventDefault();
+        pulseKeyGlow("KeyQ");
+        void enterDishSelectFromMenu();
+      }
+      return;
+    }
+
     if (game.state === "scan") {
       const key = String(e.key);
 
@@ -1553,6 +1788,7 @@ function handlePrepOrActionPress(pressedIngredient) {
       const step1Code = e.code;
       if (!QWER_CODES.includes(step1Code)) return;
       e.preventDefault();
+      pulseKeyGlow(step1Code);
       handleStep1Key(step1Code);
       return;
     }
@@ -1561,14 +1797,24 @@ function handlePrepOrActionPress(pressedIngredient) {
       const step2Code = e.code;
       if (!QWER_CODES.includes(step2Code)) return;
       e.preventDefault();
+      pulseKeyGlow(step2Code);
       handleStep2ComboKey(step2Code);
       return;
     }
     if (game.step4.active) {
       if (e.repeat) return;
-      if (e.code !== "KeyW") return;
+      if (!QWER_CODES.includes(e.code)) return;
       e.preventDefault();
+      pulseKeyGlow(e.code);
       handleStep4Key(e.code);
+      return;
+    }
+    if (shouldRunStep3GameplayFlow() && game.step3.active) {
+      if (e.repeat) return;
+      if (!QWER_CODES.includes(e.code)) return;
+      e.preventDefault();
+      pulseKeyGlow(e.code);
+      handleStep3TimingKey(e.code);
       return;
     }
     if (game.step3Intro.active) return;
@@ -1584,6 +1830,7 @@ function handlePrepOrActionPress(pressedIngredient) {
     if (qwerIndex === -1) return;
 
     e.preventDefault();
+    pulseKeyGlow(code);
 
     if (step.type === "serve") {
       if (code === "KeyW") {
@@ -1592,7 +1839,7 @@ function handlePrepOrActionPress(pressedIngredient) {
         advanceStep();
       } else {
         applyPenalty("wrongEnter");
-        setAlert("SERVE = W", "rgba(255, 89, 94, 0.92)", 0.75);
+        setAlert("SERVE = GREEN BUTTON", "rgba(255, 89, 94, 0.92)", 0.75);
       }
       return;
     }
@@ -1614,10 +1861,13 @@ function handlePrepOrActionPress(pressedIngredient) {
   }
 
   function onKeyUp(e) {
+    heldCodes.delete(e.code);
     if (game.state !== "playing") return;
     if (!game.step1.active || game.step1.intro) return;
     if (game.step1.phase !== "scoop") return;
-    if (e.code === "KeyW") game.step1.scoopHolding = false;
+    if (e.code === "KeyW" || e.code === "KeyE") {
+      game.step1.scoopHolding = heldCodes.has("KeyW") && heldCodes.has("KeyE");
+    }
   }
 
   document.addEventListener("keydown", onKeyDown);
@@ -1757,6 +2007,7 @@ function handlePrepOrActionPress(pressedIngredient) {
     lastFrameTs = ts;
 
     if (game.state === "playing") {
+      updateKeyGlow(dt);
       if (game.step1.active) {
         updateStep1(dt);
       } else if (game.step2.active) {
@@ -1776,21 +2027,26 @@ function handlePrepOrActionPress(pressedIngredient) {
         if (game.dishCountdown <= 0) {
           updateCookStep(dt);
           updateStep3Gameplay(dt);
-          if (!game.step3.finishAnim) updateComboStep(dt);
+          if (!game.step3.finishAnim && !shouldRunStep3GameplayFlow()) updateComboStep(dt);
         }
       }
       updateAlert(dt);
     }
 
+    if ((game.state === "gameover" || game.state === "win") && !game.endRecorded) {
+      recordScoreToLeaderboard();
+      game.endRecorded = true;
+    }
+
     if (game.state === "scan") updateScanFeedback(dt);
+    if (game.state !== "playing") updateKeyGlow(dt);
 
     ctx.clearRect(0, 0, canvas.width, canvas.height);
     drawBackground(ctx, canvas, assets);
 
     if (game.state === "menu") {
       titleTime += 0.05;
-      drawLanding(ctx, canvas, titleTime);
-      drawTitle(ctx, canvas, titleTime);
+      drawLanding(ctx, canvas, titleTime, assets, game);
     }
 
     if (game.state === "dish-select") {
@@ -1803,6 +2059,11 @@ function handlePrepOrActionPress(pressedIngredient) {
 
     if (game.state === "playing") {
       const uiBottomY = drawTopStack(ctx, canvas, game, alertState);
+      const preview = buildBottomPreview();
+      const showBottomButtons = true;
+      const bottomUiTop = showBottomButtons
+        ? drawBottomButtons(ctx, canvas, game, assets, preview)
+        : canvas.height;
       if (game.step1.active) {
         if (game.step1.intro) drawStep1Intro(ctx, canvas, game.step1, assets);
         else drawStep1Gameplay(ctx, canvas, game.step1, assets);
@@ -1814,12 +2075,13 @@ function handlePrepOrActionPress(pressedIngredient) {
       } else if (game.step4Intro.active) {
         drawStep4Intro(ctx, canvas, game.step4Intro, assets);
       } else if (game.step4.active) {
-        drawStep4Gameplay(ctx, canvas, game, assets);
+        drawStep4Gameplay(ctx, canvas, game, assets, uiBottomY, bottomUiTop);
       } else if (shouldRunStep3GameplayFlow()) {
-        drawStep3Gameplay(ctx, canvas, game, assets);
+        drawStep3Gameplay(ctx, canvas, game, assets, uiBottomY, bottomUiTop);
       } else {
         let y = uiBottomY;
         y += drawComboFlames(ctx, canvas, game, y) + 10;
+        y += drawTopSequencePreview(ctx, canvas, assets, preview, y) + 10;
 
         if (game.shake > 0) game.shake--;
 
@@ -1832,32 +2094,20 @@ function handlePrepOrActionPress(pressedIngredient) {
           getNeededForStep,
           getDoneForStep,
           keyLabelForIngredient,
-          assets
+          assets,
+          bottomUiTop
         });
       }
     }
 
-    if (game.state === "gameover") drawGameOver(ctx, canvas);
-    if (game.state === "win") drawWin(ctx, canvas);
+    if (game.state === "gameover") drawGameOver(ctx, canvas, game, assets);
+    if (game.state === "win") drawWin(ctx, canvas, game, assets);
 
     requestAnimationFrame(loop);
   }
 
   return {
-    async onStartClick() {
-      await ensureAudio();
-      if (!assetsLoaded) {
-        startBtn.textContent = "LOADING...";
-        await loadAssets();
-        assetsLoaded = true;
-        startBtn.textContent = "START GAME";
-      }
-
-      pickDishOptions();
-      game.state = "dish-select";
-      startBtn.style.display = "none";
-      restartBtn.style.display = "none";
-    },
+    async onStartClick() { await enterDishSelectFromMenu(); },
     restart() {
       pickDishOptions();
       game.state = "dish-select";

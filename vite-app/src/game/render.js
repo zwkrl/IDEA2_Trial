@@ -1,5 +1,44 @@
-// src/game/render.js
+﻿// src/game/render.js
 import { ingredientPool } from "./data.js";
+
+const KEY_TO_BUTTON_ASSET = {
+  Q: "btn_q",
+  W: "btn_w",
+  E: "btn_e",
+  R: "btn_r"
+};
+
+const CODE_TO_LABEL = {
+  KeyQ: "Q",
+  KeyW: "W",
+  KeyE: "E",
+  KeyR: "R"
+};
+
+function drawButtonIcon(ctx, assets, label, x, y, size, { glow = false } = {}) {
+  const key = String(label || "").toUpperCase();
+  const img = assets?.[KEY_TO_BUTTON_ASSET[key]];
+
+  ctx.save();
+  if (img) {
+    if (glow) {
+      ctx.shadowColor = "rgba(255,224,102,0.9)";
+      ctx.shadowBlur = 12;
+    }
+    ctx.drawImage(img, x, y, size, size);
+  } else {
+    ctx.fillStyle = glow ? "rgba(255,224,102,0.92)" : "rgba(255,255,255,0.18)";
+    ctx.fillRect(x, y, size, size);
+    ctx.strokeStyle = "rgba(255,255,255,0.35)";
+    ctx.strokeRect(x, y, size, size);
+    ctx.fillStyle = glow ? "#111" : "#fff";
+    ctx.font = `bold ${Math.max(14, Math.floor(size * 0.45))}px Courier New`;
+    ctx.textAlign = "center";
+    ctx.textBaseline = "middle";
+    ctx.fillText(key || "?", x + size / 2, y + size / 2);
+  }
+  ctx.restore();
+}
 
 /* ===================== BACKGROUND ===================== */
 
@@ -28,26 +67,74 @@ export function drawBackground(ctx, canvas, assets) {
 
 /* ===================== LANDING ===================== */
 
-export function drawLanding(ctx, canvas, titleTime) {
+export function drawLanding(ctx, canvas, titleTime, assets = {}, game = {}) {
   ctx.save();
-  ctx.textAlign = "center";
+  ctx.textAlign = "left";
 
-  ctx.fillStyle = "rgba(0,0,0,0.55)";
-  const panelW = Math.min(980, canvas.width - 80);
-  const panelH = 240;
-  const panelX = (canvas.width - panelW) / 2;
-  const panelY = canvas.height / 2 - 200;
+  const logo = assets?.main_logo || assets?.["main-logo"];
+  if (logo) {
+    const bounce = Math.sin(titleTime) * 6;
+    const maxW = Math.min(980, canvas.width - 80);
+    const ratio = logo.height > 0 ? (logo.width / logo.height) : 2.4;
+    const drawW = maxW;
+    const drawH = drawW / Math.max(0.1, ratio);
+    const x = (canvas.width - drawW) / 2;
+    const y = Math.max(20, canvas.height * 0.16 + bounce);
+    ctx.drawImage(logo, x, y, drawW, drawH);
+  }
+
+  const panelW = Math.min(420, canvas.width - 36);
+  const panelH = Math.min(250, canvas.height - 36);
+  const panelX = canvas.width - panelW - 18;
+  const panelY = canvas.height - panelH - 18;
+
+  ctx.fillStyle = "rgba(0,0,0,0.58)";
   ctx.fillRect(panelX, panelY, panelW, panelH);
   ctx.strokeStyle = "rgba(255,255,255,0.2)";
   ctx.strokeRect(panelX, panelY, panelW, panelH);
 
-  ctx.fillStyle = "#ffffff";
-  ctx.font = "20px Courier New";
-  ctx.fillText("Fast hands. Bold flavors. Press START GAME to begin.", canvas.width / 2, canvas.height / 2 - 30);
+  ctx.fillStyle = "#a7c7ff";
+  ctx.font = "bold 20px Courier New";
+  ctx.fillText("LEADERBOARD", panelX + 16, panelY + 32);
 
-  ctx.fillStyle = "#d7d7d7";
-  ctx.font = "18px Courier New";
-  ctx.fillText("You will pick a dish with Q W E R before the timer starts.", canvas.width / 2, canvas.height / 2 + 10);
+  const rows = (Array.isArray(game.leaderboard) ? game.leaderboard : [])
+    .slice()
+    .sort((a, b) => (Number(b?.score || 0) - Number(a?.score || 0)))
+    .slice(0, 5);
+  ctx.fillStyle = "#fff";
+  ctx.font = "16px Courier New";
+  if (rows.length === 0) {
+    ctx.fillText("No previous scores yet", panelX + 16, panelY + 64);
+  } else {
+    for (let i = 0; i < rows.length; i++) {
+      const e = rows[i];
+      const y = panelY + 64 + i * 34;
+      const date = String(e?.date || "");
+      const time = String(e?.time || "--:--");
+      ctx.fillText(`${i + 1}. ${Number(e?.score || 0)}  ${date}${time ? ` ${time}` : ""}`, panelX + 16, y);
+    }
+  }
+
+  ctx.textAlign = "center";
+  ctx.fillStyle = "#ffe066";
+  ctx.font = "bold 22px Courier New";
+  const promptY = canvas.height - 30;
+  const icon = assets?.btn_q || assets?.["blue-btn"] || null;
+  const iconSize = 50;
+  const leftText = "PRESS";
+  const rightText = "TO START";
+  const leftW = ctx.measureText(leftText).width;
+  const rightW = ctx.measureText(rightText).width;
+  const totalW = leftW + 10 + iconSize + 10 + rightW;
+  const startX = canvas.width / 2 - totalW / 2;
+
+  if (icon) {
+    ctx.fillText(leftText, startX + leftW / 2, promptY);
+    ctx.drawImage(icon, startX + leftW + 10, promptY - iconSize + 6, iconSize, iconSize);
+    ctx.fillText(rightText, startX + leftW + 10 + iconSize + 10 + rightW / 2, promptY);
+  } else {
+    ctx.fillText("PRESS Q TO START", canvas.width / 2, promptY);
+  }
 
   ctx.restore();
 }
@@ -73,10 +160,7 @@ export function drawDishInfo(ctx, canvas, game, yTop = 18) {
   if (!game.currentDish) return 0;
 
   const title = `${game.currentDish.name} (${game.currentDish.culture})`;
-  const subtitle =
-    (game.uniqueDishesCompleted && typeof game.uniqueDishesCompleted.size === "number")
-      ? `Unique dishes completed: ${game.uniqueDishesCompleted.size}/${game.dishesToWin}`
-      : "";
+  const subtitle = "";
 
   const { x: bannerX, w: bannerW } = getHudBox(canvas);
   const bannerH = subtitle ? 92 : 76;
@@ -304,11 +388,11 @@ export function drawProcessOverlay(ctx, canvas, game, assets = null) {
   ctx.fillText(`Streak ${ps.streak}  •  Beat ${ps.beats}/${ps.target}  •  Time ${ps.timeLeft.toFixed(1)}s`, mx, my + 38);
 
   if (ps.cueCode) {
-    const label = { KeyQ: "Q", KeyW: "W", KeyE: "E", KeyR: "R" }[ps.cueCode] || "?";
     ctx.fillStyle = "rgba(255, 224, 102, 0.95)";
     ctx.font = "bold 18px Courier New";
     ctx.textAlign = "center";
-    ctx.fillText(`REACT: ${label}`, canvas.width / 2, my - 44);
+    ctx.fillText("REACT:", canvas.width / 2 - 30, my - 44);
+    drawButtonIcon(ctx, assets || {}, CODE_TO_LABEL[ps.cueCode] || "?", canvas.width / 2 + 20, my - 68, 30, { glow: true });
   }
 
   if (ps.effectT > 0 && ps.effectText) {
@@ -507,19 +591,26 @@ export function drawDishSelect(ctx, canvas, options, keyLabels, assets) {
   const pad = 26;
   const panelW = Math.min(1400, canvas.width - 80);
   const cardW = (panelW - pad * (count - 1)) / count;
-  const cardH = 320;
+  const cardH = 400;
   const startX = (canvas.width - panelW) / 2;
   const startY = canvas.height / 2 - 120;
 
   ctx.save();
   ctx.textAlign = "center";
-  ctx.fillStyle = "#ffe066";
+  ctx.fillStyle = "#000000";
   ctx.font = "bold 36px Courier New";
   ctx.fillText("CHOOSE YOUR DISH", canvas.width / 2, startY - 46);
 
-  ctx.fillStyle = "#d7d7d7";
+  ctx.fillStyle = "#000000";
   ctx.font = "18px Courier New";
-  ctx.fillText("Press Q W E R", canvas.width / 2, startY - 16);
+  ctx.fillText("Press ", canvas.width / 2 - 140, startY - 16);
+  const iconY = startY - 40;
+  const iconSize = 50;
+  const iconGap = 10;
+  const rowX = canvas.width / 2 - ((iconSize * 4 + iconGap * 3) / 2);
+  for (let i = 0; i < 4; i++) {
+    drawButtonIcon(ctx, assets, keyLabels[i], rowX + i * (iconSize + iconGap), iconY, iconSize);
+  }
 
   const slugifyDishName = (name) => String(name || "")
     .toLowerCase()
@@ -534,9 +625,7 @@ export function drawDishSelect(ctx, canvas, options, keyLabels, assets) {
 
     drawPanel(ctx, x, y, cardW, cardH, 0.7);
 
-    ctx.fillStyle = "#ffe066";
-    ctx.font = "bold 22px Courier New";
-    ctx.fillText(`${keyLabels[i]}`, x + cardW / 2, y + 34);
+    drawButtonIcon(ctx, assets, keyLabels[i], x + cardW / 2 - 20, y + 14, 40, { glow: true });
 
     ctx.fillStyle = "#ffffff";
     ctx.font = "bold 20px Courier New";
@@ -549,7 +638,7 @@ export function drawDishSelect(ctx, canvas, options, keyLabels, assets) {
     const dishKey = `dish_${slugifyDishName(dish.name)}`;
     const dishImg = assets[dishKey];
     const imageW = Math.max(120, cardW - 74);
-    const imageH = 112;
+    const imageH = 200;
     const imageX = x + (cardW - imageW) / 2;
     const imageY = y + 142;
 
@@ -702,7 +791,8 @@ export function drawInstructions(ctx, canvas, game, helpers) {
     getNeededForStep,
     getDoneForStep,
     keyLabelForIngredient,
-    assets
+    assets,
+    bottomUiTop = canvas.height
   } = helpers;
 
   if (!game.currentDish) return;
@@ -711,8 +801,8 @@ export function drawInstructions(ctx, canvas, game, helpers) {
 
   const panelW = Math.min(980, canvas.width - 80);
   const panelX = (canvas.width - panelW) / 2;
-  const panelY = canvas.height - 220;
   const panelH = 170;
+  const panelY = Math.max(130, Math.min(canvas.height - panelH - 12, bottomUiTop - panelH - 16));
 
   drawPanel(ctx, panelX, panelY, panelW, panelH);
 
@@ -776,16 +866,7 @@ export function drawInstructions(ctx, canvas, game, helpers) {
 
       // Key badge (top-left)
       const key = keyLabelForIngredient(ing);
-      ctx.fillStyle = "rgba(255,224,102,0.95)";
-      ctx.fillRect(x - 6, y - 6, 20, 18);
-      ctx.strokeStyle = "rgba(0,0,0,0.55)";
-      ctx.strokeRect(x - 6, y - 6, 20, 18);
-
-      ctx.fillStyle = "#111";
-      ctx.font = "bold 12px Courier New";
-      ctx.textAlign = "center";
-      ctx.textBaseline = "middle";
-      ctx.fillText(String(key || "?"), x - 6 + 10, y - 6 + 9);
+      drawButtonIcon(ctx, assets, key, x - 16, y - 20, 24, { glow: left > 0 });
 
       // Remaining badge (top-right): xN
       const rw = 26;
@@ -810,8 +891,6 @@ export function drawInstructions(ctx, canvas, game, helpers) {
     const seq = Array.isArray(game.cookSeq) ? game.cookSeq : [];
     if (seq.length === 0) return;
 
-    const labels = { KeyQ: "Q", KeyW: "W", KeyE: "E", KeyR: "R" };
-
     const size = 44;
     const gap = 12;
     const totalW = seq.length * size + (seq.length - 1) * gap;
@@ -819,7 +898,7 @@ export function drawInstructions(ctx, canvas, game, helpers) {
 
     for (let i = 0; i < seq.length; i++) {
       const code = seq[i];
-      const ch = labels[code] || "?";
+      const ch = CODE_TO_LABEL[code] || "?";
 
       const done = !!game.cookIconsDone?.[i];
       const isNext = i === (game.cookSeqIndex | 0);
@@ -837,29 +916,10 @@ export function drawInstructions(ctx, canvas, game, helpers) {
       ctx.save();
 
       if (done) {
-        ctx.fillStyle = "rgba(128,255,114,0.85)";
-        ctx.shadowColor = "rgba(128,255,114,0.95)";
-        ctx.shadowBlur = 14;
-      } else if (isNext) {
-        ctx.fillStyle = "rgba(255,224,102,0.92)";
-        ctx.shadowColor = "rgba(255,224,102,0.95)";
-        ctx.shadowBlur = 12;
-      } else {
-        ctx.fillStyle = "rgba(255,255,255,0.12)";
-        ctx.shadowBlur = 0;
+        ctx.fillStyle = "rgba(128,255,114,0.25)";
+        ctx.fillRect(x - 2, by - 2, size + 4, size + 4);
       }
-
-      ctx.fillRect(x, by, size, size);
-      ctx.lineWidth = 2;
-      ctx.strokeStyle = "rgba(255,255,255,0.25)";
-      ctx.strokeRect(x, by, size, size);
-
-      ctx.shadowBlur = 0;
-      ctx.fillStyle = done || isNext ? "#111" : "#fff";
-      ctx.font = "bold 22px Courier New";
-      ctx.textAlign = "center";
-      ctx.textBaseline = "middle";
-      ctx.fillText(ch, x + size / 2, by + size / 2);
+      drawButtonIcon(ctx, assets, ch, x, by, size, { glow: isNext || done });
 
       ctx.restore();
     }
@@ -871,12 +931,12 @@ export function drawInstructions(ctx, canvas, game, helpers) {
   if (step.type === "prep" || step.type === "action") {
     ctx.fillStyle = "#d7d7d7";
     ctx.font = "16px Courier New";
-    ctx.fillText(`ADD INGREDIENTS (QWER only): press the key shown on each icon.`, panelX + 18, controlsY);
+    ctx.fillText(`ADD INGREDIENTS: press the matching colored button shown on each icon.`, panelX + 18, controlsY);
     drawIngredientKeyIcons(step, controlsY + 18);
   } else if (step.type === "cook") {
     ctx.fillStyle = "#d7d7d7";
     ctx.font = "16px Courier New";
-    ctx.fillText(`COOK (QWER only): hit the lit keys in order.`, panelX + 18, controlsY);
+    ctx.fillText(`COOK: hit the lit colored buttons in order.`, panelX + 18, controlsY);
 
     const iconsY = controlsY + 18;
     drawCookComboIcons(iconsY);
@@ -885,15 +945,13 @@ export function drawInstructions(ctx, canvas, game, helpers) {
     ctx.font = "14px Courier New";
     ctx.fillText(`Sequences: ${game.cookCombosDone}/${game.cookCombosNeed}`, panelX + 18, iconsY + 58);
 
-    drawCookBar(ctx, canvas, game, step, canvas.height - 250);
+    drawCookBar(ctx, canvas, game, step, 168);
   } else if (step.type === "combo") {
     const ps = game.processMini || {};
     const seq = Array.isArray(ps.seq) ? ps.seq : [];
-    const labelMap = { KeyQ: "Q", KeyW: "W", KeyE: "E", KeyR: "R" };
-
     ctx.fillStyle = "#d7d7d7";
     ctx.font = "16px Courier New";
-    ctx.fillText(`COMBO PROCESS (QWER): follow rhythm and keep the streak alive.`, panelX + 18, controlsY);
+    ctx.fillText(`COMBO PROCESS: follow rhythm and keep the streak alive.`, panelX + 18, controlsY);
 
     const size = 36;
     const gap = 10;
@@ -909,20 +967,11 @@ export function drawInstructions(ctx, canvas, game, helpers) {
       const isDone = globalIndex < (ps.index || 0);
 
       ctx.save();
-      ctx.fillStyle = isDone
-        ? "rgba(128,255,114,0.86)"
-        : isNext
-          ? "rgba(255,224,102,0.92)"
-          : "rgba(255,255,255,0.14)";
-      ctx.fillRect(sx, sy, size, size);
-      ctx.strokeStyle = "rgba(255,255,255,0.28)";
-      ctx.strokeRect(sx, sy, size, size);
-
-      ctx.fillStyle = isDone || isNext ? "#111" : "#fff";
-      ctx.font = "bold 18px Courier New";
-      ctx.textAlign = "center";
-      ctx.textBaseline = "middle";
-      ctx.fillText(labelMap[code] || "?", sx + size / 2, sy + size / 2);
+      if (isDone) {
+        ctx.fillStyle = "rgba(128,255,114,0.22)";
+        ctx.fillRect(sx - 2, sy - 2, size + 4, size + 4);
+      }
+      drawButtonIcon(ctx, assets, CODE_TO_LABEL[code] || "?", sx, sy, size, { glow: isDone || isNext });
       ctx.restore();
 
       sx += size + gap;
@@ -936,10 +985,102 @@ export function drawInstructions(ctx, canvas, game, helpers) {
   } else if (step.type === "serve") {
     ctx.fillStyle = "#d7d7d7";
     ctx.font = "16px Courier New";
-    ctx.fillText(`SERVE (QWER only): press W`, panelX + 18, controlsY);
+    ctx.fillText(`SERVE: press`, panelX + 18, controlsY);
+    drawButtonIcon(ctx, assets, "W", panelX + 220, controlsY - 20, 28, { glow: true });
   }
 
   ctx.restore();
+}
+
+export function drawBottomButtons(ctx, canvas, game, assets = {}, preview = null) {
+  const keys = ["Q", "W", "E", "R"];
+  const rowSize = 100;
+  const rowGap = 20;
+  const totalW = keys.length * rowSize + (keys.length - 1) * rowGap;
+  const startX = canvas.width / 2 - totalW / 2;
+  const rowY = canvas.height - rowSize - 12;
+
+  ctx.save();
+  const topY = rowY;
+
+  for (let i = 0; i < keys.length; i++) {
+    const key = keys[i];
+    const code = `Key${key}`;
+    const currentLabel = (preview && Array.isArray(preview.keys) && preview.index >= 0)
+      ? String(preview.keys[Math.min(preview.keys.length - 1, preview.index)] || "").toUpperCase()
+      : "";
+    const glow = Number(game?.keyGlow?.[code] || 0) > 0 || key === currentLabel;
+    drawButtonIcon(ctx, assets, key, startX + i * (rowSize + rowGap), rowY, rowSize, { glow });
+  }
+
+  ctx.restore();
+  return topY;
+}
+
+export function drawTopSequencePreview(ctx, canvas, assets = {}, preview = null, yTop = 0) {
+  const seq = Array.isArray(preview?.keys) ? preview.keys.slice(0, 8) : [];
+  if (seq.length === 0) return 0;
+
+  const pSize = 66;
+  const pGap = 10;
+  const pW = seq.length * pSize + (seq.length - 1) * pGap;
+  const panelPadX = 14;
+  const panelPadY = 14;
+  const panelW = pW + panelPadX * 2;
+  const panelH = pSize + panelPadY * 2 + 20;
+  const panelX = canvas.width / 2 - panelW / 2;
+  const panelY = yTop;
+  const currentIndex = Number.isFinite(preview?.index) ? (preview.index | 0) : -1;
+
+  ctx.save();
+  ctx.fillStyle = "rgba(30,30,30,0.52)";
+  ctx.fillRect(panelX, panelY, panelW, panelH);
+  ctx.strokeStyle = "rgba(255,255,255,0.24)";
+  ctx.strokeRect(panelX, panelY, panelW, panelH);
+
+  const px = canvas.width / 2 - pW / 2;
+  const py = panelY + panelPadY;
+  for (let i = 0; i < seq.length; i++) {
+    const x = px + i * (pSize + pGap);
+    const isCurrent = i === currentIndex;
+    const isDone = currentIndex > i;
+    const key = String(seq[i] || "").toUpperCase();
+
+    ctx.save();
+    ctx.fillStyle = isCurrent ? "rgba(255,236,140,0.55)" : "rgba(255,255,255,0.08)";
+    ctx.fillRect(x - 4, py - 4, pSize + 8, pSize + 8);
+    ctx.strokeStyle = "rgba(255,255,255,0.18)";
+    ctx.strokeRect(x - 4, py - 4, pSize + 8, pSize + 8);
+    if (isDone) {
+      ctx.fillStyle = "rgba(128,255,114,0.16)";
+      ctx.fillRect(x - 4, py - 4, pSize + 8, pSize + 8);
+    }
+    drawButtonIcon(ctx, assets, key, x, py, pSize, { glow: isCurrent || isDone });
+
+    ctx.fillStyle = "rgba(0,0,0,0.72)";
+    ctx.fillRect(x + pSize - 20, py + pSize - 16, 18, 14);
+    ctx.fillStyle = "#fff";
+    ctx.font = "bold 10px Courier New";
+    ctx.textAlign = "center";
+    ctx.textBaseline = "middle";
+    ctx.fillText(key, x + pSize - 11, py + pSize - 9);
+    ctx.restore();
+  }
+
+  if (currentIndex >= 0 && currentIndex < seq.length) {
+    const nx = px + currentIndex * (pSize + pGap);
+    ctx.fillStyle = "rgba(255,224,102,0.95)";
+    ctx.fillRect(nx, py - 18, pSize, 14);
+    ctx.strokeStyle = "rgba(0,0,0,0.55)";
+    ctx.strokeRect(nx, py - 18, pSize, 14);
+    ctx.fillStyle = "#111";
+    ctx.font = "bold 10px Courier New";
+    ctx.textAlign = "center";
+    ctx.textBaseline = "middle";
+    ctx.fillText("NEXT", nx + pSize / 2, py - 11);
+  }
+  ctx.restore();
+  return panelH;
 }
 
 export function drawStep1Intro(ctx, canvas, step1, assets = {}) {
@@ -1037,19 +1178,18 @@ export function drawStep2Gameplay(ctx, canvas, step2, assets = {}) {
     addPasteAnim: "Adding paste...",
     addChicken: "Complete combo to add chicken",
     addChickenAnim: "Adding chicken...",
-    boil: "Boiling chicken..."
+    boil: "Boil by spamming colored buttons"
   }[step2?.phase] || "Cook the chicken";
 
-  const labelForCode = (c) => ({ KeyQ: "Q", KeyW: "W", KeyE: "E", KeyR: "R" }[c] || "?");
   const comboSeq = Array.isArray(step2?.comboSeq) ? step2.comboSeq : [];
   const comboIndex = Math.max(0, Number(step2?.comboIndex || 0));
 
   const hintText = {
-    addPaste: "Press keys in order (Q/W/E/R)",
+    addPaste: "Press the shown colored buttons in order",
     addPasteAnim: "Paste animation",
-    addChicken: "Press keys in order (Q/W/E/R)",
+    addChicken: "Press the shown colored buttons in order",
     addChickenAnim: "Chicken animation",
-    boil: `Wait ${Math.max(0, Number(step2?.boilTimer || 0)).toFixed(1)}s`
+    boil: `Spam buttons: ${Math.max(0, Number(step2?.boilSpamCount || 0))}/${Math.max(1, Number(step2?.boilSpamNeed || 1))}`
   }[step2?.phase] || "Follow the next action";
 
   const chicken = assets?.chicken;
@@ -1082,41 +1222,70 @@ export function drawStep2Gameplay(ctx, canvas, step2, assets = {}) {
   ctx.fillText(hintText, instructionX, instructionY + 36);
 
   if ((step2?.phase === "addPaste" || step2?.phase === "addChicken") && comboSeq.length) {
-    const size = 44;
+    const labels = { KeyQ: "Q", KeyW: "W", KeyE: "E", KeyR: "R" };
+    const size = 68;
     const gap = 12;
-    const totalW = comboSeq.length * size + Math.max(0, comboSeq.length - 1) * gap;
-    let sx = canvas.width / 2 - totalW / 2;
-    const sy = instructionY + 64;
+    const seqLen = Math.min(6, comboSeq.length);
+    const shown = comboSeq.slice(0, seqLen);
+    const totalW = shown.length * size + Math.max(0, shown.length - 1) * gap;
+    const panelPad = 12;
+    const panelW = totalW + panelPad * 2;
+    const panelH = size + 28;
+    const panelX = canvas.width / 2 - panelW / 2;
+    const panelY = 170;
+    let sx = panelX + panelPad;
+    const sy = panelY + 14;
 
-    for (let i = 0; i < comboSeq.length; i++) {
-      const code = comboSeq[i];
+    ctx.save();
+    ctx.fillStyle = "rgba(30,30,30,0.52)";
+    ctx.fillRect(panelX, panelY, panelW, panelH);
+    ctx.strokeStyle = "rgba(255,255,255,0.24)";
+    ctx.strokeRect(panelX, panelY, panelW, panelH);
+
+    for (let i = 0; i < shown.length; i++) {
+      const code = shown[i];
+      const key = labels[code] || "?";
       const isDone = i < comboIndex;
       const isNext = i === comboIndex;
 
       ctx.save();
+      ctx.fillStyle = isNext ? "rgba(255,236,140,0.55)" : "rgba(255,255,255,0.08)";
+      ctx.fillRect(sx - 4, sy - 4, size + 8, size + 8);
+      ctx.strokeStyle = "rgba(255,255,255,0.18)";
+      ctx.strokeRect(sx - 4, sy - 4, size + 8, size + 8);
       if (isDone) {
-        ctx.fillStyle = "rgba(128,255,114,0.86)";
-      } else if (isNext) {
-        ctx.fillStyle = "rgba(255,224,102,0.92)";
-      } else {
-        ctx.fillStyle = "rgba(255,255,255,0.14)";
+        ctx.fillStyle = "rgba(128,255,114,0.16)";
+        ctx.fillRect(sx - 4, sy - 4, size + 8, size + 8);
       }
-      ctx.fillRect(sx, sy, size, size);
-      ctx.strokeStyle = "rgba(255,255,255,0.28)";
-      ctx.strokeRect(sx, sy, size, size);
 
-      ctx.fillStyle = isDone || isNext ? "#111" : "#fff";
-      ctx.font = "bold 22px Courier New";
+      drawButtonIcon(ctx, assets, key, sx, sy, size, { glow: isDone || isNext });
+
+      ctx.fillStyle = "rgba(0,0,0,0.72)";
+      ctx.fillRect(sx + size - 20, sy + size - 16, 18, 14);
+      ctx.fillStyle = "#fff";
+      ctx.font = "bold 10px Courier New";
       ctx.textAlign = "center";
       ctx.textBaseline = "middle";
-      ctx.fillText(labelForCode(code), sx + size / 2, sy + size / 2);
+      ctx.fillText(key, sx + size - 11, sy + size - 9);
       ctx.restore();
 
       sx += size + gap;
     }
 
-    ctx.textAlign = "center";
-    ctx.textBaseline = "middle";
+    if (comboIndex >= 0 && comboIndex < shown.length) {
+      const nx = panelX + panelPad + comboIndex * (size + gap);
+      ctx.fillStyle = "rgba(255,224,102,0.95)";
+      ctx.fillRect(nx, sy - 18, size, 14);
+      ctx.strokeStyle = "rgba(0,0,0,0.55)";
+      ctx.strokeRect(nx, sy - 18, size, 14);
+      ctx.fillStyle = "#111";
+      ctx.font = "bold 10px Courier New";
+      ctx.textAlign = "center";
+      ctx.textBaseline = "middle";
+      ctx.fillText("NEXT", nx + size / 2, sy - 11);
+    }
+
+    ctx.restore();
   }
 
   const potCx = canvas.width / 2;
@@ -1207,9 +1376,24 @@ export function drawStep2Gameplay(ctx, canvas, step2, assets = {}) {
       ctx.fill();
     }
 
+    const done = Math.max(0, Number(step2?.boilSpamCount || 0));
+    const need = Math.max(1, Number(step2?.boilSpamNeed || 1));
+    const p = Math.max(0, Math.min(1, done / need));
+
     ctx.fillStyle = "rgba(255,255,255,0.86)";
-    ctx.font = "bold 30px Courier New";
-    ctx.fillText(`${Math.max(0, Number(step2?.boilTimer || 0)).toFixed(1)}s`, potCx, potY - 26);
+    ctx.font = "bold 28px Courier New";
+    ctx.fillText(`${done}/${need}`, potCx, potY - 26);
+
+    const bw = 320;
+    const bh = 16;
+    const bx = potCx - bw / 2;
+    const by = potY - 4;
+    ctx.fillStyle = "rgba(255,255,255,0.16)";
+    ctx.fillRect(bx, by, bw, bh);
+    ctx.fillStyle = "rgba(128,255,114,0.92)";
+    ctx.fillRect(bx, by, bw * p, bh);
+    ctx.strokeStyle = "rgba(255,255,255,0.4)";
+    ctx.strokeRect(bx, by, bw, bh);
   }
 
   ctx.restore();
@@ -1233,11 +1417,11 @@ export function drawStep3Intro(ctx, canvas, step3Intro, assets = {}) {
 
   ctx.fillStyle = "#ffe066";
   ctx.font = "bold 40px Courier New";
-  ctx.fillText("Step 3: Stir Carefully – Not Too Fast, Not Too Slow", canvas.width / 2, panelY + 82);
+  ctx.fillText("Step 3: Stir Carefully", canvas.width / 2, panelY + 82);
 
   ctx.fillStyle = "#d7d7d7";
   ctx.font = "18px Courier New";
-  ctx.fillText("Keep the pointer in the glowing sweet spot.", canvas.width / 2, panelY + 126);
+  ctx.fillText("Press the target colored button in the green zone.", canvas.width / 2, panelY + 126);
 
   const barW = Math.min(520, panelW - 180);
   const barH = 18;
@@ -1269,11 +1453,8 @@ export function drawStep3Intro(ctx, canvas, step3Intro, assets = {}) {
   ctx.restore();
 }
 
-export function drawStep3Gameplay(ctx, canvas, game, assets = {}) {
-  const step = game.steps[game.stepIndex] || null;
-  const ps = game.processMini || {};
+export function drawStep3Gameplay(ctx, canvas, game, assets = {}, yTop = 140, bottomUiTop = null) {
   const s3 = game.step3 || {};
-  const labelMap = { KeyQ: "Q", KeyW: "W", KeyE: "E", KeyR: "R" };
 
   const pot = assets?.step2_pot_finished || assets?.step2_pot_paste || assets?.step2_pot;
   const spoon = assets?.scoop_spoon_full || assets?.scoop_spoon_half || assets?.scoop_spoon_empty;
@@ -1287,23 +1468,24 @@ export function drawStep3Gameplay(ctx, canvas, game, assets = {}) {
   ctx.textAlign = "center";
   ctx.textBaseline = "middle";
 
-  const headerY = 84;
+  const headerY = Math.max(96, yTop + 52);
   ctx.fillStyle = "rgba(0,0,0,0.52)";
-  ctx.fillRect(canvas.width / 2 - 360, headerY - 42, 720, 108);
+  ctx.fillRect(canvas.width / 2 - 360, headerY - 40, 720, 100);
   ctx.strokeStyle = "rgba(255,255,255,0.2)";
-  ctx.strokeRect(canvas.width / 2 - 360, headerY - 42, 720, 108);
+  ctx.strokeRect(canvas.width / 2 - 360, headerY - 40, 720, 100);
 
   ctx.fillStyle = "#ffe066";
   ctx.font = "bold 30px Courier New";
-  ctx.fillText("Step 3: Stir Carefully", canvas.width / 2, headerY - 12);
+  ctx.fillText("Step 3: Stir Carefully", canvas.width / 2, headerY - 10);
   ctx.fillStyle = "#a7c7ff";
   ctx.font = "15px Courier New";
-  ctx.fillText("Keep pointer in sweet zone while completing combo", canvas.width / 2, headerY + 18);
+  ctx.fillText("Press the target button when pointer is in green zone", canvas.width / 2, headerY + 16);
 
   const barW = 560;
   const barH = 20;
   const bx = canvas.width / 2 - barW / 2;
-  const by = canvas.height - 116;
+  const safeBottom = Number.isFinite(bottomUiTop) ? bottomUiTop : (canvas.height - 112);
+  const by = Math.max(headerY + 210, safeBottom - 48);
   const sweetMin = Number(s3.sweetMin ?? 0.42);
   const sweetMax = Number(s3.sweetMax ?? 0.58);
   const pointer = Math.max(0, Math.min(1, Number(s3.pointer ?? 0.5)));
@@ -1323,36 +1505,24 @@ export function drawStep3Gameplay(ctx, canvas, game, assets = {}) {
   ctx.fillStyle = "rgba(255,224,102,0.96)";
   ctx.fillRect(px - 4, by - 7, 8, barH + 14);
 
-  const seq = Array.isArray(ps.seq) ? ps.seq : [];
-  const idx = Math.max(0, Number(ps.index || 0));
-  if (seq.length) {
-    const size = 42;
-    const gap = 10;
-    const show = seq.slice(Math.max(0, idx - 1), Math.max(0, idx - 1) + 7);
-    const totalW = show.length * size + Math.max(0, show.length - 1) * gap;
-    let sx = canvas.width / 2 - totalW / 2;
-    const sy = 184;
-
-    for (let i = 0; i < show.length; i++) {
-      const globalIndex = Math.max(0, idx - 1) + i;
-      const isNext = globalIndex === idx;
-      const isDone = globalIndex < idx;
-      ctx.save();
-      ctx.fillStyle = isDone
-        ? "rgba(128,255,114,0.86)"
-        : isNext
-          ? "rgba(255,224,102,0.92)"
-          : "rgba(255,255,255,0.14)";
-      ctx.fillRect(sx, sy, size, size);
-      ctx.strokeStyle = "rgba(255,255,255,0.28)";
-      ctx.strokeRect(sx, sy, size, size);
-      ctx.fillStyle = isDone || isNext ? "#111" : "#fff";
-      ctx.font = "bold 20px Courier New";
-      ctx.fillText(labelMap[show[i]] || "?", sx + size / 2, sy + size / 2);
-      ctx.restore();
-      sx += size + gap;
-    }
-  }
+  const targetKey = CODE_TO_LABEL[s3.targetCode] || "?";
+  const targetSize = 72;
+  const targetPanelW = 180;
+  const targetPanelH = 120;
+  const targetPanelX = canvas.width / 2 - targetPanelW / 2;
+  const targetPanelY = headerY + 54;
+  ctx.fillStyle = "rgba(30,30,30,0.52)";
+  ctx.fillRect(targetPanelX, targetPanelY, targetPanelW, targetPanelH);
+  ctx.strokeStyle = "rgba(255,255,255,0.24)";
+  ctx.strokeRect(targetPanelX, targetPanelY, targetPanelW, targetPanelH);
+  ctx.fillStyle = "rgba(255,224,102,0.95)";
+  ctx.fillRect(targetPanelX + 46, targetPanelY + 8, 88, 14);
+  ctx.strokeStyle = "rgba(0,0,0,0.55)";
+  ctx.strokeRect(targetPanelX + 46, targetPanelY + 8, 88, 14);
+  ctx.fillStyle = "#111";
+  ctx.font = "bold 10px Courier New";
+  ctx.fillText("TARGET", canvas.width / 2, targetPanelY + 15);
+  drawButtonIcon(ctx, assets, targetKey, canvas.width / 2 - targetSize / 2, targetPanelY + 32, targetSize, { glow: true });
 
   if (pot) {
     ctx.fillStyle = "rgba(0,0,0,0.35)";
@@ -1376,9 +1546,19 @@ export function drawStep3Gameplay(ctx, canvas, game, assets = {}) {
     ctx.restore();
   }
 
+  const infoW = 620;
+  const infoH = 46;
+  const infoX = canvas.width / 2 - infoW / 2;
+  const infoY = by - infoH - 14;
+  ctx.fillStyle = "rgba(0,0,0,0.48)";
+  ctx.fillRect(infoX, infoY, infoW, infoH);
+  ctx.strokeStyle = "rgba(255,255,255,0.22)";
+  ctx.strokeRect(infoX, infoY, infoW, infoH);
   ctx.fillStyle = "#a7c7ff";
   ctx.font = "16px Courier New";
-  ctx.fillText(`Beat ${ps.beats || 0}/${ps.target || 0}  •  Time ${Math.max(0, Number(ps.timeLeft || 0)).toFixed(1)}s`, canvas.width / 2, canvas.height - 56);
+  const done = Math.max(0, Number(s3.hitsDone || 0));
+  const need = Math.max(1, Number(s3.hitsNeed || 3));
+  ctx.fillText(`Timed Hits ${done}/${need}`, canvas.width / 2, infoY + 30);
 
   if (s3.finishAnim) {
     ctx.fillStyle = "rgba(128,255,114,0.92)";
@@ -1411,7 +1591,7 @@ export function drawStep4Intro(ctx, canvas, step4Intro, assets = {}) {
 
   ctx.fillStyle = "#d7d7d7";
   ctx.font = "20px Courier New";
-  ctx.fillText("Press W at the right time to scoop and plate.", canvas.width / 2, panelY + 140);
+  ctx.fillText("Complete the 3-button combo in 5 seconds to serve.", canvas.width / 2, panelY + 140);
 
   ctx.fillStyle = "#a7c7ff";
   ctx.font = "16px Courier New";
@@ -1420,28 +1600,22 @@ export function drawStep4Intro(ctx, canvas, step4Intro, assets = {}) {
   ctx.restore();
 }
 
-export function drawStep4Gameplay(ctx, canvas, game, assets = {}) {
+export function drawStep4Gameplay(ctx, canvas, game, assets = {}, yTop = 140, bottomUiTop = null) {
   const s4 = game.step4 || {};
   const pot = assets?.step2_pot_finished || assets?.step2_pot_paste || assets?.step2_pot;
-  const plate = assets?.plate;
   const spoon = assets?.scoop_spoon_full || assets?.scoop_spoon_half || assets?.scoop_spoon_empty;
   const serve = assets?.step4_serve;
 
   const potW = 460;
   const potH = 250;
-  const potX = canvas.width * 0.80 - potW / 2;
+  const potX = canvas.width / 2 - potW / 2;
   const potY = canvas.height / 2 - potH / 2 - 18;
-
-  const plateW = 430;
-  const plateH = 290;
-  const plateX = canvas.width / 2 - plateW / 2;
-  const plateY = canvas.height / 2 - plateH / 2 + 84;
 
   ctx.save();
   ctx.textAlign = "center";
   ctx.textBaseline = "middle";
 
-  const headerY = 86;
+  const headerY = Math.max(96, yTop + 52);
   ctx.fillStyle = "rgba(0,0,0,0.52)";
   ctx.fillRect(canvas.width / 2 - 390, headerY - 42, 780, 106);
   ctx.strokeStyle = "rgba(255,255,255,0.2)";
@@ -1452,15 +1626,7 @@ export function drawStep4Gameplay(ctx, canvas, game, assets = {}) {
   ctx.fillText("Step 4: Dish Up & Serve", canvas.width / 2, headerY - 12);
   ctx.fillStyle = "#a7c7ff";
   ctx.font = "15px Courier New";
-  ctx.fillText("Press W when pointer is in the green zone", canvas.width / 2, headerY + 18);
-
-  if (s4.phase !== "final") {
-    if (plate) ctx.drawImage(plate, plateX, plateY, plateW, plateH);
-    else {
-      ctx.fillStyle = "rgba(255,255,255,0.14)";
-      ctx.fillRect(plateX, plateY, plateW, plateH);
-    }
-  }
+  ctx.fillText("Press the shown colored buttons in order before time runs out", canvas.width / 2, headerY + 18);
 
   if (pot) {
     ctx.fillStyle = "rgba(0,0,0,0.35)";
@@ -1470,32 +1636,78 @@ export function drawStep4Gameplay(ctx, canvas, game, assets = {}) {
     ctx.drawImage(pot, potX, potY, potW, potH);
   }
 
-  if (s4.phase === "timing") {
-    const barW = 520;
-    const barH = 20;
-    const bx = canvas.width / 2 - barW / 2;
-    const by = canvas.height - 112;
-    const sweetMin = Number(s4.sweetMin ?? 0.44);
-    const sweetMax = Number(s4.sweetMax ?? 0.58);
-    const pointer = Math.max(0, Math.min(1, Number(s4.pointer ?? 0.5)));
+  const comboSeq = Array.isArray(s4.comboSeq) ? s4.comboSeq : [];
+  const comboIndex = Math.max(0, Number(s4.comboIndex || 0));
+  if (s4.phase === "combo" && comboSeq.length) {
+    const labels = { KeyQ: "Q", KeyW: "W", KeyE: "E", KeyR: "R" };
+    const size = 68;
+    const gap = 12;
+    const shown = comboSeq.slice(0, 3);
+    const totalW = shown.length * size + Math.max(0, shown.length - 1) * gap;
+    const panelPad = 12;
+    const panelW = totalW + panelPad * 2;
+    const panelH = size + 28;
+    const panelX = canvas.width / 2 - panelW / 2;
+    const panelY = headerY + 74;
+    let sx = panelX + panelPad;
+    const sy = panelY + 14;
 
-    ctx.fillStyle = "rgba(255,255,255,0.16)";
-    ctx.fillRect(bx, by, barW, barH);
     ctx.save();
-    ctx.shadowColor = "rgba(128,255,114,0.9)";
-    ctx.shadowBlur = 12;
-    ctx.fillStyle = "rgba(128,255,114,0.88)";
-    ctx.fillRect(bx + barW * sweetMin, by, barW * (sweetMax - sweetMin), barH);
-    ctx.restore();
-    ctx.strokeStyle = "rgba(255,255,255,0.35)";
-    ctx.strokeRect(bx, by, barW, barH);
+    ctx.fillStyle = "rgba(30,30,30,0.52)";
+    ctx.fillRect(panelX, panelY, panelW, panelH);
+    ctx.strokeStyle = "rgba(255,255,255,0.24)";
+    ctx.strokeRect(panelX, panelY, panelW, panelH);
 
-    const px = bx + barW * pointer;
-    ctx.fillStyle = "rgba(255,224,102,0.96)";
-    ctx.fillRect(px - 4, by - 7, 8, barH + 14);
+    for (let i = 0; i < shown.length; i++) {
+      const code = shown[i];
+      const key = labels[code] || "?";
+      const isDone = i < comboIndex;
+      const isNext = i === comboIndex;
+
+      ctx.save();
+      ctx.fillStyle = isNext ? "rgba(255,236,140,0.55)" : "rgba(255,255,255,0.08)";
+      ctx.fillRect(sx - 4, sy - 4, size + 8, size + 8);
+      ctx.strokeStyle = "rgba(255,255,255,0.18)";
+      ctx.strokeRect(sx - 4, sy - 4, size + 8, size + 8);
+      if (isDone) {
+        ctx.fillStyle = "rgba(128,255,114,0.16)";
+        ctx.fillRect(sx - 4, sy - 4, size + 8, size + 8);
+      }
+
+      drawButtonIcon(ctx, assets, key, sx, sy, size, { glow: isDone || isNext });
+
+      ctx.fillStyle = "rgba(0,0,0,0.72)";
+      ctx.fillRect(sx + size - 20, sy + size - 16, 18, 14);
+      ctx.fillStyle = "#fff";
+      ctx.font = "bold 10px Courier New";
+      ctx.textAlign = "center";
+      ctx.textBaseline = "middle";
+      ctx.fillText(key, sx + size - 11, sy + size - 9);
+      ctx.restore();
+
+      sx += size + gap;
+    }
+
+    if (comboIndex >= 0 && comboIndex < shown.length) {
+      const nx = panelX + panelPad + comboIndex * (size + gap);
+      ctx.fillStyle = "rgba(255,224,102,0.95)";
+      ctx.fillRect(nx, sy - 18, size, 14);
+      ctx.strokeStyle = "rgba(0,0,0,0.55)";
+      ctx.strokeRect(nx, sy - 18, size, 14);
+      ctx.fillStyle = "#111";
+      ctx.font = "bold 10px Courier New";
+      ctx.textAlign = "center";
+      ctx.textBaseline = "middle";
+      ctx.fillText("NEXT", nx + size / 2, sy - 11);
+    }
+    ctx.restore();
   }
 
   if (spoon && (s4.phase === "animToPot" || s4.phase === "animToPlate")) {
+    const plateX = canvas.width / 2 - 215;
+    const plateY = canvas.height / 2 - 61;
+    const plateW = 430;
+    const plateH = 290;
     let sx = plateX + plateW * 0.5;
     let sy = plateY + plateH * 0.4;
     let rot = -0.55;
@@ -1519,11 +1731,32 @@ export function drawStep4Gameplay(ctx, canvas, game, assets = {}) {
     ctx.restore();
   }
 
+  const timerW = 520;
+  const timerH = 20;
+  const timerX = canvas.width / 2 - timerW / 2;
+  const safeBottom = Number.isFinite(bottomUiTop) ? bottomUiTop : (canvas.height - 112);
+  const timerY = Math.max(headerY + 210, safeBottom - 48);
+  if (s4.phase === "combo") {
+    const duration = Math.max(0.1, Number(s4.duration || 5));
+    const left = Math.max(0, Number(s4.timeLeft || 0));
+    const ratio = Math.max(0, Math.min(1, left / duration));
+
+    ctx.fillStyle = "rgba(255,255,255,0.16)";
+    ctx.fillRect(timerX, timerY, timerW, timerH);
+    ctx.fillStyle = ratio > 0.35 ? "rgba(128,255,114,0.88)" : "rgba(255, 89, 94, 0.9)";
+    ctx.fillRect(timerX, timerY, timerW * ratio, timerH);
+    ctx.strokeStyle = "rgba(255,255,255,0.35)";
+    ctx.strokeRect(timerX, timerY, timerW, timerH);
+    ctx.fillStyle = "#a7c7ff";
+    ctx.font = "16px Courier New";
+    ctx.fillText(`Time Left: ${left.toFixed(1)}s`, canvas.width / 2, timerY - 14);
+  }
+
   if (s4.phase === "final") {
     if (serve) {
-      const fw = plateW + 90;
-      const fh = plateH + 100;
-      ctx.drawImage(serve, plateX - 45, plateY - 56, fw, fh);
+      const fw = 520;
+      const fh = 360;
+      ctx.drawImage(serve, canvas.width / 2 - fw / 2, canvas.height / 2 - fh / 2 + 40, fw, fh);
     }
     ctx.fillStyle = "rgba(128,255,114,0.95)";
     ctx.font = "bold 26px Courier New";
@@ -1544,17 +1777,17 @@ export function drawStep1Gameplay(ctx, canvas, step1, assets = {}) {
 
   const phaseText = {
     lying: "Shell is ready on the board",
-    smash: "Spam Q W E R quickly to crack",
-    scoop: "Hold W to scoop (half then full)",
+    smash: "Spam any button quickly to crack",
+    scoop: "Hold green + yellow buttons to scoop (half then full)",
     pound: "Spam to pound smooth paste"
   }[step1?.phase] || "Crack & Make Paste";
 
   const hintText = {
     lying: "Start smashing now",
-    smash: "Press any Q/W/E/R very fast",
-    scoop: `Hold W to fill spoon (${Math.max(0, Math.min(Number(step1?.scoopNeed || 2), Number(step1?.scoopStage || 0)))}/${Math.max(1, Number(step1?.scoopNeed || 2))})`,
-    pound: "Press any Q/W/E/R rapidly"
-  }[step1?.phase] || "Use Q W E R";
+    smash: "Press any button very fast",
+    scoop: `Hold green + yellow to fill spoon (${Math.max(0, Math.min(Number(step1?.scoopNeed || 2), Number(step1?.scoopStage || 0)))}/${Math.max(1, Number(step1?.scoopNeed || 2))})`,
+    pound: "Press any button rapidly"
+  }[step1?.phase] || "Use the colored buttons";
 
   const shell = assets?.smash_shell;
   const crack1 = assets?.smash_crack_1;
@@ -1697,7 +1930,7 @@ export function drawStep1Gameplay(ctx, canvas, step1, assets = {}) {
   const barW = Math.min(560, panelW - 120);
   const barH = 18;
   const bx = canvas.width / 2 - barW / 2;
-  const by = canvas.height - 86;
+  const by = 168;
 
   if (step1?.showProgress) {
     const p = Math.max(0, Math.min(1, Number(step1.progress || 0)));
@@ -1718,18 +1951,147 @@ export function drawStep1Gameplay(ctx, canvas, step1, assets = {}) {
 
 /* ===================== END SCREENS ===================== */
 
-export function drawGameOver(ctx, canvas) {
-  ctx.fillStyle = "#fff";
-  ctx.font = "bold 60px Courier New";
+export function drawGameOver(ctx, canvas, game = {}, assets = {}) {
+  ctx.save();
   ctx.textAlign = "center";
-  ctx.fillText("TIME UP!", canvas.width / 2, canvas.height / 2);
+
+  const panelW = Math.min(900, canvas.width - 80);
+  const panelH = Math.min(620, canvas.height - 80);
+  const panelX = (canvas.width - panelW) / 2;
+  const panelY = (canvas.height - panelH) / 2;
+
+  ctx.fillStyle = "rgba(0,0,0,0.68)";
+  ctx.fillRect(panelX, panelY, panelW, panelH);
+  ctx.strokeStyle = "rgba(255,255,255,0.25)";
+  ctx.lineWidth = 2;
+  ctx.strokeRect(panelX, panelY, panelW, panelH);
+
+  ctx.fillStyle = "#fff";
+  ctx.font = "bold 58px Courier New";
+  ctx.fillText("TIME UP!", canvas.width / 2, panelY + 82);
+
+  ctx.font = "bold 24px Courier New";
+  ctx.fillStyle = "#ffe066";
+  ctx.fillText(`Your Score: ${game.score || 0}`, canvas.width / 2, panelY + 126);
+
+  ctx.font = "bold 30px Courier New";
+  ctx.fillStyle = "#a7c7ff";
+  ctx.fillText("LEADERBOARD", canvas.width / 2, panelY + 176);
+
+  const rows = (Array.isArray(game.leaderboard) ? game.leaderboard : [])
+    .slice()
+    .sort((a, b) => (Number(b?.score || 0) - Number(a?.score || 0)))
+    .slice(0, 8);
+  ctx.font = "20px Courier New";
+  ctx.fillStyle = "#fff";
+
+  if (rows.length === 0) {
+    ctx.fillText("No previous scores yet", canvas.width / 2, panelY + 220);
+  } else {
+    for (let i = 0; i < rows.length; i++) {
+      const entry = rows[i];
+      const rank = i + 1;
+      const score = Number(entry?.score || 0);
+      const date = String(entry?.date || "");
+      const y = panelY + 220 + i * 40;
+      const time = String(entry?.time || "--:--");
+      ctx.fillText(`${rank}. ${score}  (${date}${time ? ` ${time}` : ""})`, canvas.width / 2, y);
+    }
+  }
+
+  const icon = assets?.btn_q || assets?.["blue-btn"];
+  const btnSize = 58;
+  const bx = canvas.width / 2 - 170;
+  const by = panelY + panelH - 76;
+  if (icon) ctx.drawImage(icon, bx, by - btnSize / 2, btnSize, btnSize);
+  ctx.fillStyle = "#ffe066";
+  ctx.font = "bold 22px Courier New";
+  ctx.textAlign = "left";
+  ctx.fillText("Press Q to return to title", bx + 72, by + 8);
+  ctx.restore();
 }
 
-export function drawWin(ctx, canvas) {
-  ctx.fillStyle = "#fff";
-  ctx.font = "bold 60px Courier New";
+export function drawWin(ctx, canvas, game = {}, assets = {}) {
+  ctx.save();
   ctx.textAlign = "center";
-  ctx.fillText("YOU WIN!", canvas.width / 2, canvas.height / 2 - 20);
-  ctx.font = "24px Courier New";
-  ctx.fillText("All unique dishes completed", canvas.width / 2, canvas.height / 2 + 30);
+
+  const panelW = Math.min(900, canvas.width - 80);
+  const panelH = Math.min(620, canvas.height - 80);
+  const panelX = (canvas.width - panelW) / 2;
+  const panelY = (canvas.height - panelH) / 2;
+
+  ctx.fillStyle = "rgba(0,0,0,0.68)";
+  ctx.fillRect(panelX, panelY, panelW, panelH);
+  ctx.strokeStyle = "rgba(255,255,255,0.25)";
+  ctx.lineWidth = 2;
+  ctx.strokeRect(panelX, panelY, panelW, panelH);
+
+  ctx.fillStyle = "#fff";
+  ctx.font = "bold 58px Courier New";
+  ctx.fillText("DISH COMPLETE!", canvas.width / 2, panelY + 82);
+
+  ctx.font = "bold 24px Courier New";
+  ctx.fillStyle = "#ffe066";
+  ctx.fillText(`Your Score: ${game.score || 0}`, canvas.width / 2, panelY + 124);
+
+  const slug = String(game.currentDish?.name || "").toLowerCase().trim().replace(/[^a-z0-9]+/g, "-");
+  const dishArt = assets?.[`dish_${slug}`] || assets?.[`dish-${slug}`];
+  if (dishArt) {
+    const artW = 330;
+    const ratio = dishArt.width > 0 ? (dishArt.height / dishArt.width) : 0.62;
+    const artH = Math.round(artW * ratio);
+    const artX = canvas.width / 2 - artW / 2;
+    const artY = panelY + 145;
+
+    const glow = ctx.createRadialGradient(
+      canvas.width / 2, artY + artH / 2, 12,
+      canvas.width / 2, artY + artH / 2, Math.max(artW, artH) * 0.8
+    );
+    glow.addColorStop(0, "rgba(255, 224, 102, 0.55)");
+    glow.addColorStop(1, "rgba(255, 224, 102, 0.00)");
+    ctx.fillStyle = glow;
+    ctx.fillRect(artX - 80, artY - 80, artW + 160, artH + 160);
+
+    ctx.save();
+    ctx.shadowColor = "rgba(255, 224, 102, 0.75)";
+    ctx.shadowBlur = 24;
+    ctx.drawImage(dishArt, artX, artY, artW, artH);
+    ctx.restore();
+  }
+
+  ctx.font = "bold 30px Courier New";
+  ctx.fillStyle = "#a7c7ff";
+  ctx.fillText("LEADERBOARD", canvas.width / 2, panelY + 410);
+
+  const rows = (Array.isArray(game.leaderboard) ? game.leaderboard : [])
+    .slice()
+    .sort((a, b) => (Number(b?.score || 0) - Number(a?.score || 0)))
+    .slice(0, 4);
+  ctx.font = "20px Courier New";
+  ctx.fillStyle = "#fff";
+  if (rows.length === 0) {
+    ctx.fillText("No previous scores yet", canvas.width / 2, panelY + 448);
+  } else {
+    for (let i = 0; i < rows.length; i++) {
+      const entry = rows[i];
+      const rank = i + 1;
+      const score = Number(entry?.score || 0);
+      const date = String(entry?.date || "");
+      const y = panelY + 448 + i * 30;
+      const time = String(entry?.time || "--:--");
+      ctx.fillText(`${rank}. ${score}  (${date}${time ? ` ${time}` : ""})`, canvas.width / 2, y);
+    }
+  }
+
+  const icon = assets?.btn_q || assets?.["blue-btn"];
+  const btnSize = 58;
+  const bx = canvas.width / 2 - 170;
+  const by = panelY + panelH - 28;
+  if (icon) ctx.drawImage(icon, bx, by - btnSize / 2, btnSize, btnSize);
+  ctx.fillStyle = "#ffe066";
+  ctx.font = "bold 22px Courier New";
+  ctx.textAlign = "left";
+  ctx.fillText("Press Q to return to title", bx + 72, by + 8);
+  ctx.restore();
 }
+

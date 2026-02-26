@@ -63,10 +63,10 @@ export const dishes = [
       {
         type: "combo",
         process: "Process 3: Stir & Cook Chicken",
-        label: "Rapid combos + random cue hits for juicy chicken. Misses can burn the pan.",
+        label: "Keep stir meter in zone and complete a 3-hit combo. Misses can burn the pan.",
         comboMode: "stir",
-        targetBeats: 14,
-        time: 14,
+        targetBeats: 3,
+        time: 22,
         cueEvery: 4,
         cueWindow: 1.0
       },
