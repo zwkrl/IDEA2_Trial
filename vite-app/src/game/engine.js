@@ -74,14 +74,22 @@ export function createGame({ canvas, startBtn, restartBtn, hud }) {
       loadImage("pork", "/assets/ingredients/pork.png"),
       loadImage("garlic", "/assets/ingredients/garlic.png"),
       loadImage("ginger", "/assets/ingredients/ginger.png"),
+      loadImage("chopped_bowl", "/assets/ingredients/chopped-bowl.png"),
       loadImage("chili", "/assets/ingredients/chili.png"),
       loadImage("shrimp", "/assets/ingredients/shrimp.png"),
       loadImage("coconut", "/assets/ingredients/coconut.png"),
       loadImage("rice", "/assets/ingredients/rice.png"),
+      loadImage("chop_garlic_1", "/assets/process1_chinese/garlic_stage1.png"),
+      loadImage("chop_garlic_2", "/assets/process1_chinese/garlic_stage2.png"),
+      loadImage("chop_garlic_3", "/assets/process1_chinese/garlic_stage3.png"),
+      loadImage("chop_ginger_1", "/assets/process1_chinese/ginger_stage1.png"),
+      loadImage("chop_ginger_2", "/assets/process1_chinese/ginger_stage2.png"),
+      loadImage("chop_ginger_3", "/assets/process1_chinese/ginger_stage3.png"),
       loadImage("btn_q", "/assets/ui/blue-btn.png"),
       loadImage("btn_w", "/assets/ui/green-btn.png"),
       loadImage("btn_e", "/assets/ui/yellow-btn.png"),
       loadImage("btn_r", "/assets/ui/white-btn.png"),
+      loadImage("rice_plate", "/assets/ui/rice_plate.png"),
       loadImageVariants("smash_pestle", [
         "/assets/process1/pestle.png",
         "/assets/process1/pestle (1).png"
@@ -129,6 +137,11 @@ export function createGame({ canvas, startBtn, restartBtn, hud }) {
         "/assets/process1/spoon_empty.png",
         "/assets/process1/spoon.png"
       ]),
+      loadImageVariants("scoop_spoon_stir", [
+        "/assets/process1/scoop_spoon.png",
+        "/assets/process1/spoon.png",
+        "/assets/process1/scoop_spoon_empty.png"
+      ]),
       loadImageVariants("scoop_spoon_half", [
         "/assets/process1/scoop_stage_2.png",
         "/assets/process1/scoop_spoon_half.png"
@@ -151,6 +164,10 @@ export function createGame({ canvas, startBtn, restartBtn, hud }) {
         "/assets/process2/pot_finished.png",
         "/assets/process2/pot finished.png"
       ]),
+      loadImage("step2_chinese_clove", "/assets/process2_chinese/clove.png"),
+      loadImage("step2_chinese_oil", "/assets/process2_chinese/oil_bottle.png"),
+      loadImage("step2_chinese_pot_stage1", "/assets/process2_chinese/pot_stage1.png"),
+      loadImage("step2_chinese_pot_stage2", "/assets/process2_chinese/pot_stage2.png"),
       loadImageVariants("step4_serve", [
         "/assets/process2/serve.png",
         "/assets/process2/serve (1).png"
@@ -537,36 +554,56 @@ export function createGame({ canvas, startBtn, restartBtn, hud }) {
   }
 
   function shouldRunStep1Flow() {
-    return game.currentDish?.name === "AYAM BUAH KELUAK" && game.stepIndex === 0;
+    return ["AYAM BUAH KELUAK", "LOR KAI YIK"].includes(game.currentDish?.name) && game.stepIndex === 0;
   }
 
   function shouldRunStep2Flow() {
-    return game.currentDish?.name === "AYAM BUAH KELUAK" && game.stepIndex === 1;
+    return ["AYAM BUAH KELUAK", "LOR KAI YIK"].includes(game.currentDish?.name) && game.stepIndex === 1;
   }
 
   function shouldRunStep3IntroFlow() {
-    return game.currentDish?.name === "AYAM BUAH KELUAK" && game.stepIndex === 2;
+    return ["AYAM BUAH KELUAK", "LOR KAI YIK"].includes(game.currentDish?.name) && game.stepIndex === 2;
   }
 
   function shouldRunStep4IntroFlow() {
-    return game.currentDish?.name === "AYAM BUAH KELUAK" && game.stepIndex === 3;
+    return ["AYAM BUAH KELUAK", "LOR KAI YIK"].includes(game.currentDish?.name) && game.stepIndex === 3;
   }
 
   function shouldRunStep3GameplayFlow() {
-    const step = currentStep();
-    return game.currentDish?.name === "AYAM BUAH KELUAK"
-      && game.stepIndex === 2
-      && !!step
-      && step.type === "combo"
-      && String(step.comboMode || "") === "stir";
+    return ["AYAM BUAH KELUAK", "LOR KAI YIK"].includes(game.currentDish?.name)
+      && game.stepIndex === 2;
   }
 
   function shouldRunStep4GameplayFlow() {
-    return game.currentDish?.name === "AYAM BUAH KELUAK" && game.stepIndex === 3;
+    return ["AYAM BUAH KELUAK", "LOR KAI YIK"].includes(game.currentDish?.name) && game.stepIndex === 3;
   }
 
   function updateStep1UiModel() {
     const s = game.step1;
+
+    if (s.mode === "chinese-chop") {
+      if (s.intro) {
+        s.showProgress = false;
+        s.progress = 0;
+        s.smashProgress = 0;
+        s.poundProgress = 0;
+        return;
+      }
+
+      if (s.phase === "chop") {
+        const chopCount = Number(s.chopCount || 0);
+        const chopNeed = Math.max(1, Number(s.chopNeed || 1));
+        s.showProgress = true;
+        s.progress = Math.max(0, Math.min(1, chopCount / chopNeed));
+      } else {
+        s.showProgress = false;
+        s.progress = 0;
+      }
+
+      s.smashProgress = 0;
+      s.poundProgress = 0;
+      return;
+    }
 
     if (s.intro) {
       s.showProgress = false;
@@ -607,12 +644,51 @@ export function createGame({ canvas, startBtn, restartBtn, hud }) {
   }
 
   function startStep1Flow() {
+    const isChineseChopFlow = game.currentDish?.name === "LOR KAI YIK";
+
+    if (isChineseChopFlow) {
+      game.step1 = {
+        ...game.step1,
+        active: true,
+        intro: true,
+        introTimer: 5,
+        animT: 0,
+        mode: "chinese-chop",
+        phase: "chop",
+        chopTargets: ["garlic", "ginger"],
+        chopTargetIndex: 0,
+        chopCount: 0,
+        chopNeed: 18,
+        chopStage: 0,
+        sweepReady: false,
+        progress: 0,
+        showProgress: true,
+        smashProgress: 0,
+        poundProgress: 0,
+        scoopStage: 0,
+        scoopNeed: 2,
+        scoopHold: 0,
+        scoopFill: 0,
+        scoopHolding: false,
+        smashCount: 0,
+        smashNeed: 14,
+        poundCount: 0,
+        poundNeed: 18,
+        placedOnPlate: true
+      };
+
+      game.dishCountdown = 0;
+      setAlert("STEP 1 INTRO", "rgba(255, 224, 102, 0.95)", 1.0);
+      return;
+    }
+
     game.step1 = {
       ...game.step1,
       active: true,
       intro: true,
       introTimer: 5,
       animT: 0,
+      mode: "keluak",
       smashPulse: 0,
       lastSmashAt: 0,
       phase: "smash",
@@ -636,6 +712,73 @@ export function createGame({ canvas, startBtn, restartBtn, hud }) {
     setAlert("STEP 1 INTRO", "rgba(255, 224, 102, 0.95)", 1.0);
   }
 
+  function currentStep1ChopTarget() {
+    const targets = Array.isArray(game.step1.chopTargets) ? game.step1.chopTargets : ["garlic", "ginger"];
+    const index = Math.max(0, Math.min(targets.length - 1, Number(game.step1.chopTargetIndex || 0)));
+    return targets[index] || "garlic";
+  }
+
+  function handleChineseStep1Key(code) {
+    const s = game.step1;
+    if (!s.active || s.intro) return;
+
+    if (s.phase === "chop") {
+      s.chopCount = Math.min(Math.max(1, Number(s.chopNeed || 1)), Number(s.chopCount || 0) + 1);
+      const chopNeed = Math.max(1, Number(s.chopNeed || 1));
+      const ratio = s.chopCount / chopNeed;
+      const nextStage = ratio >= 1 ? 3 : ratio >= 2 / 3 ? 2 : ratio >= 1 / 3 ? 1 : 0;
+
+      if (nextStage > Number(s.chopStage || 0)) {
+        s.chopStage = nextStage;
+        game.score += 8;
+      } else {
+        game.score += 4;
+      }
+
+      updateHUD();
+      playBeep(760, 0.04);
+
+      if (s.chopCount >= chopNeed) {
+        s.phase = "sweep";
+        s.sweepReady = true;
+        const ing = currentStep1ChopTarget().toUpperCase();
+        setAlert(`PRESS GREEN TO SWEEP ${ing} INTO BOWL`, "rgba(255, 224, 102, 0.95)", 0.8);
+      }
+      return;
+    }
+
+    if (s.phase !== "sweep") return;
+
+    if (code !== "KeyW") {
+      setAlert("SWEEP = GREEN BUTTON", "rgba(255, 89, 94, 0.92)", 0.6);
+      playBeep(220, 0.03);
+      return;
+    }
+
+    game.score += 24;
+    updateHUD();
+    playBeep(860, 0.05);
+
+    const targets = Array.isArray(s.chopTargets) ? s.chopTargets : ["garlic", "ginger"];
+    const nextIndex = Number(s.chopTargetIndex || 0) + 1;
+
+    if (nextIndex >= targets.length) {
+      completeStep1Flow();
+      return;
+    }
+
+    s.chopTargetIndex = nextIndex;
+    s.phase = "chop";
+    s.chopCount = 0;
+    s.chopStage = 0;
+    s.sweepReady = false;
+    s.progress = 0;
+    s.showProgress = true;
+
+    const nextTarget = currentStep1ChopTarget().toUpperCase();
+    setAlert(`NOW CHOP ${nextTarget}`, "rgba(128, 255, 114, 0.92)", 0.7);
+  }
+
   function completeStep1Flow() {
     game.step1.active = false;
     game.step1.intro = false;
@@ -648,6 +791,11 @@ export function createGame({ canvas, startBtn, restartBtn, hud }) {
     const s = game.step1;
     if (!s.active || s.intro) return;
     if (!QWER_CODES.includes(code)) return;
+
+    if (s.mode === "chinese-chop") {
+      handleChineseStep1Key(code);
+      return;
+    }
 
     if (s.phase === "smash") {
       const now = performance.now();
@@ -699,6 +847,21 @@ export function createGame({ canvas, startBtn, restartBtn, hud }) {
     if (!s.active) return;
 
     s.animT += dt;
+
+    if (s.mode === "chinese-chop") {
+      if (s.intro) {
+        s.introTimer = Math.max(0, s.introTimer - dt);
+        if (s.introTimer <= 0) {
+          s.intro = false;
+          const target = currentStep1ChopTarget().toUpperCase();
+          setAlert(`STEP 1 START! CHOP ${target}`, "rgba(128, 255, 114, 0.92)", 0.75);
+        }
+      }
+
+      updateStep1UiModel();
+      return;
+    }
+
     s.smashPulse = Math.max(0, Number(s.smashPulse || 0) - dt * 6.2);
 
     if (s.intro) {
@@ -745,6 +908,41 @@ export function createGame({ canvas, startBtn, restartBtn, hud }) {
   }
 
   function startStep2Flow() {
+    const isChineseBraiseFlow = game.currentDish?.name === "LOR KAI YIK";
+
+    if (isChineseBraiseFlow) {
+      const comboLen = 4;
+      const comboSeq = Array.from({ length: comboLen }, () => QWER_CODES[Math.floor(Math.random() * QWER_CODES.length)]);
+      game.step2 = {
+        ...game.step2,
+        active: true,
+        intro: true,
+        introTimer: 5,
+        animT: 0,
+        mode: "lor-braise",
+        phase: "addOilClove",
+        addedPaste: false,
+        addedChicken: false,
+        comboSeq,
+        comboIndex: 0,
+        comboLen,
+        transitionT: 0,
+        boilSpamCount: 0,
+        boilSpamNeed: 20,
+        heatTimer: 7,
+        heatDuration: 7,
+        heatLevel: 0.52,
+        heatIdealMin: 0.45,
+        heatIdealMax: 0.62,
+        heatOffTime: 0,
+        lastHeatTapAt: 0
+      };
+
+      game.dishCountdown = 0;
+      setAlert("STEP 2 INTRO", "rgba(255, 224, 102, 0.95)", 1.0);
+      return;
+    }
+
     const comboLen = 5;
     const comboSeq = Array.from({ length: comboLen }, () => QWER_CODES[Math.floor(Math.random() * QWER_CODES.length)]);
     game.step2 = {
@@ -753,6 +951,7 @@ export function createGame({ canvas, startBtn, restartBtn, hud }) {
       intro: true,
       introTimer: 5,
       animT: 0,
+      mode: "ayam-cook",
       phase: "addPaste",
       addedPaste: false,
       addedChicken: false,
@@ -781,6 +980,68 @@ export function createGame({ canvas, startBtn, restartBtn, hud }) {
     if (!s.active) return;
 
     s.animT += dt;
+
+    if (s.mode === "lor-braise") {
+      if (s.intro) {
+        s.introTimer = Math.max(0, s.introTimer - dt);
+        if (s.introTimer <= 0) {
+          s.intro = false;
+          setAlert("COMPLETE COMBO TO ADD OIL + CLOVE", "rgba(255, 224, 102, 0.95)", 0.85);
+        }
+        return;
+      }
+
+      if (s.phase === "addOilCloveAnim") {
+        s.transitionT = Math.max(0, s.transitionT - dt);
+        if (s.transitionT <= 0) {
+          s.phase = "addChicken";
+          s.comboSeq = Array.from({ length: s.comboLen || 4 }, () => QWER_CODES[Math.floor(Math.random() * QWER_CODES.length)]);
+          s.comboIndex = 0;
+          setAlert("OIL + CLOVE ADDED! COMBO FOR CHICKEN", "rgba(255, 224, 102, 0.95)", 0.85);
+        }
+        return;
+      }
+
+      if (s.phase === "addChickenAnim") {
+        s.transitionT = Math.max(0, s.transitionT - dt);
+        if (s.transitionT <= 0) {
+          s.phase = "heat";
+          s.heatTimer = Math.max(6, Math.min(8, Number(s.heatDuration || 7)));
+          s.heatLevel = 0.52;
+          s.heatOffTime = 0;
+          s.lastHeatTapAt = 0;
+          setAlert("TAP IN RHYTHM TO HOLD IDEAL HEAT", "rgba(128, 255, 114, 0.92)", 0.95);
+        }
+        return;
+      }
+
+      if (s.phase === "heat") {
+        s.heatTimer = Math.max(0, Number(s.heatTimer || 0) - dt);
+        s.heatLevel = Math.max(0, Math.min(1, Number(s.heatLevel || 0) - dt * 0.16));
+
+        const min = Number(s.heatIdealMin ?? 0.45);
+        const max = Number(s.heatIdealMax ?? 0.62);
+        const inIdeal = s.heatLevel >= min && s.heatLevel <= max;
+        if (!inIdeal) s.heatOffTime = Number(s.heatOffTime || 0) + dt;
+
+        if (s.heatTimer <= 0) {
+          if ((s.heatOffTime || 0) <= 1.8) {
+            game.score += 180;
+            setAlert("PERFECT BRAISE HEAT!", "rgba(128, 255, 114, 0.92)", 0.8);
+          } else if ((s.heatOffTime || 0) <= 3.6) {
+            game.score += 110;
+            setAlert("GOOD BRAISE START", "rgba(255, 224, 102, 0.95)", 0.8);
+          } else {
+            game.score += 60;
+            setAlert("BRAISE STARTED", "rgba(255, 224, 102, 0.95)", 0.8);
+          }
+          updateHUD();
+          completeStep2Flow();
+        }
+      }
+
+      return;
+    }
 
     if (s.intro) {
       s.introTimer = Math.max(0, s.introTimer - dt);
@@ -824,6 +1085,72 @@ export function createGame({ canvas, startBtn, restartBtn, hud }) {
   function handleStep2ComboKey(code) {
     const s = game.step2;
     if (!s.active || s.intro) return;
+
+    if (s.mode === "lor-braise") {
+      if (s.phase === "heat") {
+        const now = performance.now();
+        const dtTap = s.lastHeatTapAt > 0 ? (now - s.lastHeatTapAt) / 1000 : 0;
+        s.lastHeatTapAt = now;
+
+        const inRhythm = dtTap === 0 || (dtTap >= 0.28 && dtTap <= 0.62);
+        const gain = inRhythm ? 0.12 : 0.05;
+        s.heatLevel = Math.max(0, Math.min(1, Number(s.heatLevel || 0) + gain));
+
+        game.score += inRhythm ? 14 : 7;
+        updateHUD();
+        playBeep(inRhythm ? 760 : 640, 0.04);
+
+        if (!inRhythm) {
+          setAlert("KEEP A STEADY RHYTHM", "rgba(255, 224, 102, 0.95)", 0.4);
+        }
+        return;
+      }
+
+      if (s.phase !== "addOilClove" && s.phase !== "addChicken") return;
+
+      const expected = s.comboSeq[s.comboIndex];
+      if (!expected) return;
+
+      if (code !== expected) {
+        s.comboIndex = 0;
+        applyPenalty("wrongInput");
+        setAlert("WRONG KEY! COMBO RESET", "rgba(255, 89, 94, 0.92)", 0.6);
+        return;
+      }
+
+      s.comboIndex++;
+      game.score += 20;
+      updateHUD();
+      playBeep(630 + s.comboIndex * 24, 0.045);
+
+      if (s.comboIndex < s.comboSeq.length) {
+        setAlert(`COMBO ${s.comboIndex}/${s.comboSeq.length}`, "rgba(255, 224, 102, 0.95)", 0.45);
+        return;
+      }
+
+      s.comboIndex = 0;
+
+      if (s.phase === "addOilClove") {
+        s.phase = "addOilCloveAnim";
+        s.transitionT = 0.9;
+        game.score += 80;
+        updateHUD();
+        playBeep(720, 0.08);
+        setAlert("ADDING OIL + CLOVE...", "rgba(128, 255, 114, 0.92)", 0.75);
+        return;
+      }
+
+      if (s.phase === "addChicken") {
+        s.phase = "addChickenAnim";
+        s.transitionT = 0.9;
+        game.score += 95;
+        updateHUD();
+        playBeep(780, 0.08);
+        setAlert("ADDING CHICKEN...", "rgba(128, 255, 114, 0.92)", 0.75);
+      }
+      return;
+    }
+
     if (s.phase === "boil") {
       s.boilSpamCount = Math.min(Math.max(1, s.boilSpamNeed | 0), (s.boilSpamCount | 0) + 1);
       game.score += 8;
@@ -880,10 +1207,12 @@ export function createGame({ canvas, startBtn, restartBtn, hud }) {
 
   function startStep3Intro() {
     const targetCode = QWER_CODES[Math.floor(Math.random() * QWER_CODES.length)];
+    const isLorKaiYik = game.currentDish?.name === "LOR KAI YIK";
     game.step3Intro = {
       active: true,
       timer: 5,
-      animT: 0
+      animT: 0,
+      dishName: game.currentDish?.name || ""
     };
     game.step3 = {
       ...game.step3,
@@ -899,7 +1228,7 @@ export function createGame({ canvas, startBtn, restartBtn, hud }) {
       finishTimer: 0,
       stirPhase: 0
     };
-    setAlert("STEP 3 INTRO", "rgba(255, 224, 102, 0.95)", 0.9);
+    setAlert(isLorKaiYik ? "STEP 3: SLOW SIMMER" : "STEP 3 INTRO", "rgba(255, 224, 102, 0.95)", 0.9);
   }
 
   function startStep4Intro() {
@@ -908,7 +1237,8 @@ export function createGame({ canvas, startBtn, restartBtn, hud }) {
     game.step4Intro = {
       active: true,
       timer: 5,
-      animT: 0
+      animT: 0,
+      dishName: game.currentDish?.name || ""
     };
     game.step4 = {
       ...game.step4,
@@ -933,7 +1263,14 @@ export function createGame({ canvas, startBtn, restartBtn, hud }) {
     if (game.step3Intro.timer <= 0) {
       game.step3Intro.active = false;
       game.step3.active = true;
-      setAlert("STEP 3 START! HIT THE TARGET BUTTON IN THE GREEN ZONE", "rgba(128, 255, 114, 0.92)", 1.0);
+      const isLorKaiYik = game.currentDish?.name === "LOR KAI YIK";
+      setAlert(
+        isLorKaiYik
+          ? "STEP 3 START! TIME BUTTON IN GREEN ZONE (0/3)"
+          : "STEP 3 START! HIT THE TARGET BUTTON IN THE GREEN ZONE",
+        "rgba(128, 255, 114, 0.92)",
+        1.0
+      );
     }
   }
 
@@ -941,6 +1278,8 @@ export function createGame({ canvas, startBtn, restartBtn, hud }) {
     const s = game.step3;
     if (!shouldRunStep3GameplayFlow()) return;
     if (!s.active || s.finishAnim) return;
+    const isLorKaiYik = game.currentDish?.name === "LOR KAI YIK";
+    const requiredHits = isLorKaiYik ? 3 : Math.max(1, Number(s.hitsNeed || 3));
 
     const inSweet = s.pointer >= s.sweetMin && s.pointer <= s.sweetMax;
     const correctCode = code === s.targetCode;
@@ -957,12 +1296,12 @@ export function createGame({ canvas, startBtn, restartBtn, hud }) {
       return;
     }
 
-    s.hitsDone += 1;
+    s.hitsDone = Math.min(requiredHits, Number(s.hitsDone || 0) + 1);
     game.score += 90;
     updateHUD();
     playBeep(760, 0.07);
 
-    if (s.hitsDone >= s.hitsNeed) {
+    if (s.hitsDone >= requiredHits) {
       s.finishAnim = true;
       s.finishTimer = 1.15;
       setAlert("STIR COMPLETE!", "rgba(128, 255, 114, 0.95)", 0.9);
@@ -970,7 +1309,7 @@ export function createGame({ canvas, startBtn, restartBtn, hud }) {
     }
 
     s.targetCode = QWER_CODES[Math.floor(Math.random() * QWER_CODES.length)];
-    setAlert(`NICE TIMING! ${s.hitsDone}/${s.hitsNeed}`, "rgba(255, 224, 102, 0.95)", 0.55);
+    setAlert(`NICE TIMING! ${s.hitsDone}/${requiredHits}`, "rgba(255, 224, 102, 0.95)", 0.55);
   }
 
   function updateStep4Intro(dt) {
@@ -1066,7 +1405,8 @@ export function createGame({ canvas, startBtn, restartBtn, hud }) {
         s.phase = "final";
         s.finalT = 1.35;
         s.phaseT = 0;
-        setAlert("AYAM BUAH KELUAK SERVED!", "rgba(128, 255, 114, 0.95)", 0.9);
+        const servedName = game.currentDish?.name || "DISH";
+        setAlert(`${servedName} SERVED!`, "rgba(128, 255, 114, 0.95)", 0.9);
       }
       return;
     }
@@ -1092,6 +1432,8 @@ export function createGame({ canvas, startBtn, restartBtn, hud }) {
         s.pointer = 0;
         s.pointerDir = 1;
       }
+
+      s.stirPhase += dt * 4.8;
     }
 
     if (s.finishAnim) {
@@ -2025,9 +2367,12 @@ function handlePrepOrActionPress(pressedIngredient) {
         updateDishCountdown(dt);
         updateShake(dt);
         if (game.dishCountdown <= 0) {
-          updateCookStep(dt);
-          updateStep3Gameplay(dt);
-          if (!game.step3.finishAnim && !shouldRunStep3GameplayFlow()) updateComboStep(dt);
+          if (shouldRunStep3GameplayFlow()) {
+            updateStep3Gameplay(dt);
+          } else {
+            updateCookStep(dt);
+            if (!game.step3.finishAnim) updateComboStep(dt);
+          }
         }
       }
       updateAlert(dt);
