@@ -85,6 +85,10 @@ export function createGame({ canvas, startBtn, restartBtn, hud }) {
       loadImage("chop_ginger_1", "/assets/process1_chinese/ginger_stage1.png"),
       loadImage("chop_ginger_2", "/assets/process1_chinese/ginger_stage2.png"),
       loadImage("chop_ginger_3", "/assets/process1_chinese/ginger_stage3.png"),
+      loadImage("laksa_chillies", "/assets/process1_LAKSA_SIGLAP/chillies.png"),
+      loadImage("laksa_pestle", "/assets/process1_LAKSA_SIGLAP/seperate_pestle.png"),
+      loadImage("laksa_mortar_empty", "/assets/process1_LAKSA_SIGLAP/empty_motar.png"),
+      loadImage("laksa_mortar_full", "/assets/process1_LAKSA_SIGLAP/smashed_chilli_motar.png"),
       loadImage("btn_q", "/assets/ui/blue-btn.png"),
       loadImage("btn_w", "/assets/ui/green-btn.png"),
       loadImage("btn_e", "/assets/ui/yellow-btn.png"),
@@ -554,7 +558,7 @@ export function createGame({ canvas, startBtn, restartBtn, hud }) {
   }
 
   function shouldRunStep1Flow() {
-    return ["AYAM BUAH KELUAK", "LOR KAI YIK"].includes(game.currentDish?.name) && game.stepIndex === 0;
+    return ["AYAM BUAH KELUAK", "LOR KAI YIK", "LAKSA SIGLAP"].includes(game.currentDish?.name) && game.stepIndex === 0;
   }
 
   function shouldRunStep2Flow() {
@@ -580,6 +584,33 @@ export function createGame({ canvas, startBtn, restartBtn, hud }) {
 
   function updateStep1UiModel() {
     const s = game.step1;
+
+    if (s.mode === "laksa-paste") {
+      if (s.intro) {
+        s.showProgress = false;
+        s.progress = 0;
+        s.smashProgress = 0;
+        s.poundProgress = 0;
+        return;
+      }
+
+      if (s.phase === "addChili") {
+        const done = Math.max(0, Number(s.chiliCount || 0));
+        const need = Math.max(1, Number(s.chiliNeed || 3));
+        s.showProgress = true;
+        s.progress = Math.max(0, Math.min(1, done / need));
+      } else if (s.phase === "grindDoneAnim") {
+        s.showProgress = true;
+        s.progress = 1;
+      } else {
+        s.showProgress = false;
+        s.progress = 0;
+      }
+
+      s.smashProgress = 0;
+      s.poundProgress = 0;
+      return;
+    }
 
     if (s.mode === "chinese-chop") {
       if (s.intro) {
@@ -645,6 +676,7 @@ export function createGame({ canvas, startBtn, restartBtn, hud }) {
 
   function startStep1Flow() {
     const isChineseChopFlow = game.currentDish?.name === "LOR KAI YIK";
+    const isLaksaPasteFlow = game.currentDish?.name === "LAKSA SIGLAP";
 
     if (isChineseChopFlow) {
       game.step1 = {
@@ -674,6 +706,36 @@ export function createGame({ canvas, startBtn, restartBtn, hud }) {
         smashNeed: 14,
         poundCount: 0,
         poundNeed: 18,
+        placedOnPlate: true
+      };
+
+      game.dishCountdown = 0;
+      setAlert("STEP 1 INTRO", "rgba(255, 224, 102, 0.95)", 1.0);
+      return;
+    }
+
+    if (isLaksaPasteFlow) {
+      const comboLen = 4;
+      const comboSeq = Array.from({ length: comboLen }, () => QWER_CODES[Math.floor(Math.random() * QWER_CODES.length)]);
+      game.step1 = {
+        ...game.step1,
+        active: true,
+        intro: true,
+        introTimer: 5,
+        animT: 0,
+        mode: "laksa-paste",
+        phase: "addChili",
+        chiliCount: 0,
+        chiliNeed: 3,
+        chiliDropT: 0,
+        comboSeq,
+        comboIndex: 0,
+        comboLen,
+        grindDoneT: 0,
+        progress: 0,
+        smashProgress: 0,
+        poundProgress: 0,
+        showProgress: true,
         placedOnPlate: true
       };
 
@@ -779,6 +841,49 @@ export function createGame({ canvas, startBtn, restartBtn, hud }) {
     setAlert(`NOW CHOP ${nextTarget}`, "rgba(128, 255, 114, 0.92)", 0.7);
   }
 
+  function handleLaksaStep1Key(code) {
+    const s = game.step1;
+    if (!s.active || s.intro) return;
+
+    if (s.phase !== "addChili") return;
+
+    const expected = s.comboSeq[s.comboIndex];
+    if (!expected) return;
+
+    if (code !== expected) {
+      s.comboIndex = 0;
+      applyPenalty("wrongInput");
+      setAlert("WRONG BUTTON! COMBO RESET", "rgba(255, 89, 94, 0.92)", 0.55);
+      return;
+    }
+
+    s.comboIndex++;
+    game.score += 14;
+    updateHUD();
+    playBeep(640 + s.comboIndex * 24, 0.04);
+
+    if (s.comboIndex < s.comboSeq.length) {
+      setAlert(`CHILI COMBO ${s.comboIndex}/${s.comboSeq.length}`, "rgba(255, 224, 102, 0.95)", 0.45);
+      return;
+    }
+
+    s.comboIndex = 0;
+    s.chiliCount = Math.min(Math.max(1, Number(s.chiliNeed || 3)), Number(s.chiliCount || 0) + 1);
+    s.chiliDropT = 0.55;
+    game.score += 35;
+    updateHUD();
+    playBeep(760, 0.07);
+
+    if (s.chiliCount >= Math.max(1, Number(s.chiliNeed || 3))) {
+      s.phase = "grindDoneAnim";
+      s.grindDoneT = 0.65;
+      setAlert("CHILI PASTE READY!", "rgba(128, 255, 114, 0.95)", 0.7);
+    } else {
+      s.comboSeq = Array.from({ length: s.comboLen || 4 }, () => QWER_CODES[Math.floor(Math.random() * QWER_CODES.length)]);
+      setAlert(`CHILIES ${s.chiliCount}/${s.chiliNeed}`, "rgba(255, 224, 102, 0.95)", 0.6);
+    }
+  }
+
   function completeStep1Flow() {
     game.step1.active = false;
     game.step1.intro = false;
@@ -794,6 +899,11 @@ export function createGame({ canvas, startBtn, restartBtn, hud }) {
 
     if (s.mode === "chinese-chop") {
       handleChineseStep1Key(code);
+      return;
+    }
+
+    if (s.mode === "laksa-paste") {
+      handleLaksaStep1Key(code);
       return;
     }
 
@@ -847,6 +957,29 @@ export function createGame({ canvas, startBtn, restartBtn, hud }) {
     if (!s.active) return;
 
     s.animT += dt;
+
+    if (s.mode === "laksa-paste") {
+      if (s.intro) {
+        s.introTimer = Math.max(0, s.introTimer - dt);
+        if (s.introTimer <= 0) {
+          s.intro = false;
+          setAlert("STEP 1 START! ADD CHILIES 3 TIMES", "rgba(128, 255, 114, 0.92)", 0.75);
+        }
+      }
+
+      s.chiliDropT = Math.max(0, Number(s.chiliDropT || 0) - dt);
+
+      if (s.phase === "grindDoneAnim") {
+        s.grindDoneT = Math.max(0, Number(s.grindDoneT || 0) - dt);
+        if (s.grindDoneT <= 0) {
+          completeStep1Flow();
+          return;
+        }
+      }
+
+      updateStep1UiModel();
+      return;
+    }
 
     if (s.mode === "chinese-chop") {
       if (s.intro) {

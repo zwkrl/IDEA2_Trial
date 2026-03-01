@@ -1083,6 +1083,7 @@ export function drawTopSequencePreview(ctx, canvas, assets = {}, preview = null,
 export function drawStep1Intro(ctx, canvas, step1, assets = {}) {
   const t = Number(step1?.introTimer || 0);
   const isChineseStep1 = String(step1?.mode || "") === "chinese-chop";
+  const isLaksaStep1 = String(step1?.mode || "") === "laksa-paste";
 
   ctx.save();
   ctx.fillStyle = "rgba(0,0,0,0.68)";
@@ -1100,7 +1101,11 @@ export function drawStep1Intro(ctx, canvas, step1, assets = {}) {
   ctx.fillStyle = "#ffe066";
   ctx.font = "bold 44px Courier New";
   ctx.fillText(
-    isChineseStep1 ? "Step 1: Prep the Garlic and Ginger" : "Step 1: Crack & Make Paste",
+    isChineseStep1
+      ? "Step 1: Prep the Garlic and Ginger"
+      : isLaksaStep1
+        ? "Step 1: Make the Laksa Chili Paste"
+        : "Step 1: Crack & Make Paste",
     canvas.width / 2,
     panelY + 76
   );
@@ -1110,18 +1115,24 @@ export function drawStep1Intro(ctx, canvas, step1, assets = {}) {
   ctx.fillText(
     isChineseStep1
       ? "Cutting board ready. Start with garlic, then ginger."
-      : "Get ready to crack buah keluak and pound the paste!",
+      : isLaksaStep1
+        ? "Mortar ready. Complete 3 chili combos to make the paste."
+        : "Get ready to crack buah keluak and pound the paste!",
     canvas.width / 2,
     panelY + 124
   );
 
-  const icon = isChineseStep1 ? (assets?.garlic || assets?.ginger || assets?.smash_shell) : assets?.smash_shell;
+  const icon = isChineseStep1
+    ? (assets?.garlic || assets?.ginger || assets?.smash_shell)
+    : isLaksaStep1
+      ? (assets?.laksa_mortar_empty || assets?.laksa_chillies || assets?.chili || assets?.smash_shell)
+      : assets?.smash_shell;
   const bounce = Math.sin((step1?.animT || 0) * 5.2) * 10;
   const iconSize = 92;
   const ix = canvas.width / 2 - iconSize / 2;
   const iy = panelY + 148 + bounce;
   if (icon) {
-    ctx.drawImage(icon, ix, iy, iconSize, isChineseStep1 ? iconSize : iconSize * 0.72);
+    ctx.drawImage(icon, ix, iy, iconSize, (isChineseStep1 || isLaksaStep1) ? iconSize : iconSize * 0.72);
   } else {
     ctx.fillStyle = "#6f4b2e";
     ctx.beginPath();
@@ -2054,6 +2065,147 @@ export function drawStep4Gameplay(ctx, canvas, game, assets = {}, yTop = 140, bo
 }
 
 export function drawStep1Gameplay(ctx, canvas, step1, assets = {}) {
+  if (String(step1?.mode || "") === "laksa-paste") {
+    const phase = String(step1?.phase || "addChili");
+    const chiliCount = Math.max(0, Number(step1?.chiliCount || 0));
+    const chiliNeed = Math.max(1, Number(step1?.chiliNeed || 3));
+    const comboSeq = Array.isArray(step1?.comboSeq) ? step1.comboSeq : [];
+    const comboIndex = Math.max(0, Number(step1?.comboIndex || 0));
+
+    const phaseText = {
+      addChili: "Complete sequence to add chilies into mortar",
+      grindDoneAnim: "Chili paste complete"
+    }[phase] || "Make the chili paste";
+
+    const hintText = {
+      addChili: `Chilies added: ${chiliCount}/${chiliNeed}`,
+      grindDoneAnim: "Switching to grinded chili mortar"
+    }[phase] || "Use Q/W/E/R";
+
+    const instructionX = canvas.width / 2;
+    const instructionY = canvas.height - 172;
+
+    const mortarEmpty = assets?.laksa_mortar_empty;
+    const mortarFull = assets?.laksa_mortar_full;
+    const chilies = assets?.laksa_chillies || assets?.chili;
+
+    const bowlCx = canvas.width / 2;
+    const bowlCy = canvas.height / 2 + 42;
+    const bowlW = 540;
+    const bowlH = 290;
+    const bowlX = bowlCx - bowlW / 2;
+    const bowlY = bowlCy - bowlH / 2;
+
+    ctx.save();
+    ctx.textAlign = "center";
+    ctx.textBaseline = "middle";
+
+    ctx.fillStyle = "rgba(0,0,0,0.52)";
+    ctx.fillRect(instructionX - 310, instructionY - 52, 620, 108);
+    ctx.strokeStyle = "rgba(255,255,255,0.2)";
+    ctx.strokeRect(instructionX - 310, instructionY - 52, 620, 108);
+
+    ctx.fillStyle = "#ffe066";
+    ctx.font = "bold 30px Courier New";
+    ctx.fillText("Step 1: Make the Laksa Chili Paste", instructionX, instructionY - 20);
+
+    ctx.fillStyle = "#d7d7d7";
+    ctx.font = "19px Courier New";
+    ctx.fillText(phaseText, instructionX, instructionY + 10);
+
+    ctx.fillStyle = "#a7c7ff";
+    ctx.font = "15px Courier New";
+    ctx.fillText(hintText, instructionX, instructionY + 36);
+
+    ctx.fillStyle = "rgba(0,0,0,0.35)";
+    ctx.beginPath();
+    ctx.ellipse(bowlCx, bowlCy + bowlH * 0.42, bowlW * 0.36, 24, 0, 0, Math.PI * 2);
+    ctx.fill();
+
+    if (phase === "grindDoneAnim" && mortarFull) {
+      ctx.drawImage(mortarFull, bowlX, bowlY, bowlW, bowlH);
+    } else if (mortarEmpty) {
+      ctx.drawImage(mortarEmpty, bowlX, bowlY, bowlW, bowlH);
+    } else {
+      ctx.fillStyle = "rgba(90,90,90,0.85)";
+      ctx.beginPath();
+      ctx.ellipse(bowlCx, bowlCy + 12, bowlW * 0.34, bowlH * 0.2, 0, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.fillStyle = "rgba(68,68,68,0.92)";
+      ctx.beginPath();
+      ctx.ellipse(bowlCx, bowlCy + 36, bowlW * 0.28, bowlH * 0.16, 0, 0, Math.PI * 2);
+      ctx.fill();
+    }
+
+    if (phase === "addChili" && chilies && Number(step1?.chiliDropT || 0) > 0) {
+      const spriteW = 122;
+      const spriteH = 92;
+      const t = Math.max(0, Math.min(1, 1 - Number(step1?.chiliDropT || 0) / 0.55));
+      const sx = bowlCx - spriteW / 2;
+      const startY = bowlY - 86;
+      const endY = bowlY + 12;
+      const sy = startY + (endY - startY) * t;
+      ctx.drawImage(chilies, sx, sy, spriteW, spriteH);
+    }
+
+    if (phase === "addChili" && comboSeq.length) {
+      const labels = { KeyQ: "Q", KeyW: "W", KeyE: "E", KeyR: "R" };
+      const size = 60;
+      const seqGap = 10;
+      const shown = comboSeq.slice(0, Math.min(6, comboSeq.length));
+      const totalW = shown.length * size + Math.max(0, shown.length - 1) * seqGap;
+      const panelPad = 12;
+      const panelW = totalW + panelPad * 2;
+      const panelH = size + 24;
+      const panelX = canvas.width / 2 - panelW / 2;
+      const panelY = 180;
+      let sx = panelX + panelPad;
+      const sy = panelY + 12;
+
+      ctx.fillStyle = "rgba(30,30,30,0.52)";
+      ctx.fillRect(panelX, panelY, panelW, panelH);
+      ctx.strokeStyle = "rgba(255,255,255,0.24)";
+      ctx.strokeRect(panelX, panelY, panelW, panelH);
+
+      for (let i = 0; i < shown.length; i++) {
+        const key = labels[shown[i]] || "?";
+        const isDone = i < comboIndex;
+        ctx.fillStyle = "rgba(255,255,255,0.08)";
+        ctx.fillRect(sx - 4, sy - 4, size + 8, size + 8);
+        ctx.strokeStyle = "rgba(255,255,255,0.18)";
+        ctx.strokeRect(sx - 4, sy - 4, size + 8, size + 8);
+        if (isDone) {
+          ctx.fillStyle = "rgba(128,255,114,0.16)";
+          ctx.fillRect(sx - 4, sy - 4, size + 8, size + 8);
+        }
+        drawButtonIcon(ctx, assets, key, sx, sy, size, { glow: isDone });
+        sx += size + seqGap;
+      }
+    }
+
+    const barW = Math.min(560, canvas.width - 260);
+    const barH = 18;
+    const bx = canvas.width / 2 - barW / 2;
+    const by = 152;
+    const p = phase === "grindDoneAnim"
+      ? 1
+      : Math.max(0, Math.min(1, chiliCount / chiliNeed));
+
+    ctx.fillStyle = "rgba(255,255,255,0.18)";
+    ctx.fillRect(bx, by, barW, barH);
+    ctx.fillStyle = "rgba(128,255,114,0.92)";
+    ctx.fillRect(bx, by, barW * p, barH);
+    ctx.strokeStyle = "rgba(255,255,255,0.35)";
+    ctx.strokeRect(bx, by, barW, barH);
+
+    ctx.fillStyle = "#a7c7ff";
+    ctx.font = "16px Courier New";
+    ctx.fillText(`${Math.floor(p * 100)}%`, canvas.width / 2, by + 34);
+
+    ctx.restore();
+    return;
+  }
+
   if (String(step1?.mode || "") === "chinese-chop") {
     const panelW = Math.min(980, canvas.width - 90);
     const panelH = 360;
