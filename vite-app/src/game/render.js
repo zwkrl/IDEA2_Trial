@@ -1006,10 +1006,7 @@ export function drawBottomButtons(ctx, canvas, game, assets = {}, preview = null
   for (let i = 0; i < keys.length; i++) {
     const key = keys[i];
     const code = `Key${key}`;
-    const currentLabel = (preview && Array.isArray(preview.keys) && preview.index >= 0)
-      ? String(preview.keys[Math.min(preview.keys.length - 1, preview.index)] || "").toUpperCase()
-      : "";
-    const glow = Number(game?.keyGlow?.[code] || 0) > 0 || key === currentLabel;
+    const glow = Number(game?.keyGlow?.[code] || 0) > 0;
     drawButtonIcon(ctx, assets, key, startX + i * (rowSize + rowGap), rowY, rowSize, { glow });
   }
 
@@ -1200,7 +1197,7 @@ export function drawStep2Intro(ctx, canvas, step2, assets = {}) {
     if (pot) {
       const pw = 280;
       const ph = 140;
-      ctx.drawImage(pot, canvas.width / 2 - pw / 2, panelY + 156, pw, ph);
+      ctx.drawImage(pot, canvas.width / 2 - pw / 2, panelY + 186, pw, ph);
     }
   }
 
@@ -1286,10 +1283,9 @@ export function drawStep2Gameplay(ctx, canvas, step2, assets = {}) {
         const code = shown[i];
         const key = labels[code] || "?";
         const isDone = i < comboIndex;
-        const isNext = i === comboIndex;
 
         ctx.save();
-        ctx.fillStyle = isNext ? "rgba(255,236,140,0.55)" : "rgba(255,255,255,0.08)";
+        ctx.fillStyle = "rgba(255,255,255,0.08)";
         ctx.fillRect(sx - 4, sy - 4, size + 8, size + 8);
         ctx.strokeStyle = "rgba(255,255,255,0.18)";
         ctx.strokeRect(sx - 4, sy - 4, size + 8, size + 8);
@@ -1298,7 +1294,7 @@ export function drawStep2Gameplay(ctx, canvas, step2, assets = {}) {
           ctx.fillRect(sx - 4, sy - 4, size + 8, size + 8);
         }
 
-        drawButtonIcon(ctx, assets, key, sx, sy, size, { glow: isDone || isNext });
+        drawButtonIcon(ctx, assets, key, sx, sy, size, { glow: isDone });
         ctx.restore();
         sx += size + gap;
       }
@@ -1508,10 +1504,9 @@ export function drawStep2Gameplay(ctx, canvas, step2, assets = {}) {
       const code = shown[i];
       const key = labels[code] || "?";
       const isDone = i < comboIndex;
-      const isNext = i === comboIndex;
 
       ctx.save();
-      ctx.fillStyle = isNext ? "rgba(255,236,140,0.55)" : "rgba(255,255,255,0.08)";
+      ctx.fillStyle = "rgba(255,255,255,0.08)";
       ctx.fillRect(sx - 4, sy - 4, size + 8, size + 8);
       ctx.strokeStyle = "rgba(255,255,255,0.18)";
       ctx.strokeRect(sx - 4, sy - 4, size + 8, size + 8);
@@ -1520,7 +1515,7 @@ export function drawStep2Gameplay(ctx, canvas, step2, assets = {}) {
         ctx.fillRect(sx - 4, sy - 4, size + 8, size + 8);
       }
 
-      drawButtonIcon(ctx, assets, key, sx, sy, size, { glow: isDone || isNext });
+      drawButtonIcon(ctx, assets, key, sx, sy, size, { glow: isDone });
 
       ctx.fillStyle = "rgba(0,0,0,0.72)";
       ctx.fillRect(sx + size - 20, sy + size - 16, 18, 14);
@@ -1532,19 +1527,6 @@ export function drawStep2Gameplay(ctx, canvas, step2, assets = {}) {
       ctx.restore();
 
       sx += size + gap;
-    }
-
-    if (comboIndex >= 0 && comboIndex < shown.length) {
-      const nx = panelX + panelPad + comboIndex * (size + gap);
-      ctx.fillStyle = "rgba(255,224,102,0.95)";
-      ctx.fillRect(nx, sy - 18, size, 14);
-      ctx.strokeStyle = "rgba(0,0,0,0.55)";
-      ctx.strokeRect(nx, sy - 18, size, 14);
-      ctx.fillStyle = "#111";
-      ctx.font = "bold 10px Courier New";
-      ctx.textAlign = "center";
-      ctx.textBaseline = "middle";
-      ctx.fillText("NEXT", nx + size / 2, sy - 11);
     }
 
     ctx.restore();
