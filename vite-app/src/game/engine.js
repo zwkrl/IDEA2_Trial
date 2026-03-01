@@ -172,6 +172,13 @@ export function createGame({ canvas, startBtn, restartBtn, hud }) {
       loadImage("step2_chinese_oil", "/assets/process2_chinese/oil_bottle.png"),
       loadImage("step2_chinese_pot_stage1", "/assets/process2_chinese/pot_stage1.png"),
       loadImage("step2_chinese_pot_stage2", "/assets/process2_chinese/pot_stage2.png"),
+      loadImage("step2_eurasian_chopped_garlic_ginger", "/assets/process2_eurasian/chopped-garlic-ginger.png"),
+      loadImage("step3_eurasian_pot_base", "/assets/ingredients/cooking-pot.png"),
+      loadImage("step2_eurasian_fry_pan", "/assets/process2_eurasian/fry-pan.png"),
+      loadImage("step2_eurasian_fry_stage1", "/assets/process2_eurasian/fry-garlic-stage-1.png"),
+      loadImage("step2_eurasian_fry_stage2", "/assets/process2_eurasian/fry-garlic-stage-2.png"),
+      loadImage("step3_eurasian_pot_chili", "/assets/process3_eurasian/cooking-pot-chili.png"),
+      loadImage("step3_eurasian_pot_pork", "/assets/process3_eurasian/cooking-pot-pork.png"),
       loadImageVariants("step4_serve", [
         "/assets/process2/serve.png",
         "/assets/process2/serve (1).png"
@@ -558,11 +565,11 @@ export function createGame({ canvas, startBtn, restartBtn, hud }) {
   }
 
   function shouldRunStep1Flow() {
-    return ["AYAM BUAH KELUAK", "LOR KAI YIK", "LAKSA SIGLAP"].includes(game.currentDish?.name) && game.stepIndex === 0;
+    return ["AYAM BUAH KELUAK", "LOR KAI YIK", "CURRY FENG", "LAKSA SIGLAP"].includes(game.currentDish?.name) && game.stepIndex === 0;
   }
 
   function shouldRunStep2Flow() {
-    return ["AYAM BUAH KELUAK", "LOR KAI YIK"].includes(game.currentDish?.name) && game.stepIndex === 1;
+    return ["AYAM BUAH KELUAK", "LOR KAI YIK", "CURRY FENG"].includes(game.currentDish?.name) && game.stepIndex === 1;
   }
 
   function shouldRunStep3IntroFlow() {
@@ -570,7 +577,7 @@ export function createGame({ canvas, startBtn, restartBtn, hud }) {
   }
 
   function shouldRunStep4IntroFlow() {
-    return ["AYAM BUAH KELUAK", "LOR KAI YIK"].includes(game.currentDish?.name) && game.stepIndex === 3;
+    return ["AYAM BUAH KELUAK", "LOR KAI YIK", "CURRY FENG"].includes(game.currentDish?.name) && game.stepIndex === 3;
   }
 
   function shouldRunStep3GameplayFlow() {
@@ -578,8 +585,12 @@ export function createGame({ canvas, startBtn, restartBtn, hud }) {
       && game.stepIndex === 2;
   }
 
+  function shouldRunCurryStep3BraiseFlow() {
+    return game.currentDish?.name === "CURRY FENG" && game.stepIndex === 2;
+  }
+
   function shouldRunStep4GameplayFlow() {
-    return ["AYAM BUAH KELUAK", "LOR KAI YIK"].includes(game.currentDish?.name) && game.stepIndex === 3;
+    return ["AYAM BUAH KELUAK", "LOR KAI YIK", "CURRY FENG"].includes(game.currentDish?.name) && game.stepIndex === 3;
   }
 
   function updateStep1UiModel() {
@@ -675,7 +686,7 @@ export function createGame({ canvas, startBtn, restartBtn, hud }) {
   }
 
   function startStep1Flow() {
-    const isChineseChopFlow = game.currentDish?.name === "LOR KAI YIK";
+    const isChineseChopFlow = ["LOR KAI YIK", "CURRY FENG"].includes(game.currentDish?.name);
     const isLaksaPasteFlow = game.currentDish?.name === "LAKSA SIGLAP";
 
     if (isChineseChopFlow) {
@@ -1040,8 +1051,8 @@ export function createGame({ canvas, startBtn, restartBtn, hud }) {
     updateStep1UiModel();
   }
 
-  function startStep2Flow() {
-    const isChineseBraiseFlow = game.currentDish?.name === "LOR KAI YIK";
+  function startStep2Flow(phaseTag = "step2") {
+    const isChineseBraiseFlow = ["LOR KAI YIK", "CURRY FENG"].includes(game.currentDish?.name);
 
     if (isChineseBraiseFlow) {
       const comboLen = 4;
@@ -1053,6 +1064,8 @@ export function createGame({ canvas, startBtn, restartBtn, hud }) {
         introTimer: 5,
         animT: 0,
         mode: "lor-braise",
+        dishName: game.currentDish?.name || "",
+        braiseVariant: game.currentDish?.name === "CURRY FENG" && phaseTag === "step3" ? "chili-pork" : "garlic-ginger",
         phase: "addOilClove",
         addedPaste: false,
         addedChicken: false,
@@ -1070,9 +1083,12 @@ export function createGame({ canvas, startBtn, restartBtn, hud }) {
         heatOffTime: 0,
         lastHeatTapAt: 0
       };
-
       game.dishCountdown = 0;
-      setAlert("STEP 2 INTRO", "rgba(255, 224, 102, 0.95)", 1.0);
+      setAlert(
+        game.currentDish?.name === "CURRY FENG" && phaseTag === "step3" ? "STEP 3 INTRO" : "STEP 2 INTRO",
+        "rgba(255, 224, 102, 0.95)",
+        1.0
+      );
       return;
     }
 
@@ -1115,11 +1131,16 @@ export function createGame({ canvas, startBtn, restartBtn, hud }) {
     s.animT += dt;
 
     if (s.mode === "lor-braise") {
+      const isCurryStep3 = s.dishName === "CURRY FENG" && s.braiseVariant === "chili-pork";
       if (s.intro) {
         s.introTimer = Math.max(0, s.introTimer - dt);
         if (s.introTimer <= 0) {
           s.intro = false;
-          setAlert("COMPLETE COMBO TO ADD OIL + CLOVE", "rgba(255, 224, 102, 0.95)", 0.85);
+          setAlert(
+            isCurryStep3 ? "COMPLETE COMBO TO ADD OIL + CHILI" : "COMPLETE COMBO TO ADD OIL + CLOVE",
+            "rgba(255, 224, 102, 0.95)",
+            0.85
+          );
         }
         return;
       }
@@ -1130,7 +1151,11 @@ export function createGame({ canvas, startBtn, restartBtn, hud }) {
           s.phase = "addChicken";
           s.comboSeq = Array.from({ length: s.comboLen || 4 }, () => QWER_CODES[Math.floor(Math.random() * QWER_CODES.length)]);
           s.comboIndex = 0;
-          setAlert("OIL + CLOVE ADDED! COMBO FOR CHICKEN", "rgba(255, 224, 102, 0.95)", 0.85);
+          setAlert(
+            isCurryStep3 ? "OIL + CHILI ADDED! COMBO FOR PORK" : "OIL + CLOVE ADDED! COMBO FOR CHICKEN",
+            "rgba(255, 224, 102, 0.95)",
+            0.85
+          );
         }
         return;
       }
@@ -1340,7 +1365,7 @@ export function createGame({ canvas, startBtn, restartBtn, hud }) {
 
   function startStep3Intro() {
     const targetCode = QWER_CODES[Math.floor(Math.random() * QWER_CODES.length)];
-    const isLorKaiYik = game.currentDish?.name === "LOR KAI YIK";
+    const usesLorStyleFlow = ["LOR KAI YIK", "CURRY FENG"].includes(game.currentDish?.name);
     game.step3Intro = {
       active: true,
       timer: 5,
@@ -1361,7 +1386,7 @@ export function createGame({ canvas, startBtn, restartBtn, hud }) {
       finishTimer: 0,
       stirPhase: 0
     };
-    setAlert(isLorKaiYik ? "STEP 3: SLOW SIMMER" : "STEP 3 INTRO", "rgba(255, 224, 102, 0.95)", 0.9);
+    setAlert(usesLorStyleFlow ? "STEP 3: SLOW SIMMER" : "STEP 3 INTRO", "rgba(255, 224, 102, 0.95)", 0.9);
   }
 
   function startStep4Intro() {
@@ -1396,9 +1421,9 @@ export function createGame({ canvas, startBtn, restartBtn, hud }) {
     if (game.step3Intro.timer <= 0) {
       game.step3Intro.active = false;
       game.step3.active = true;
-      const isLorKaiYik = game.currentDish?.name === "LOR KAI YIK";
+      const usesLorStyleFlow = ["LOR KAI YIK", "CURRY FENG"].includes(game.currentDish?.name);
       setAlert(
-        isLorKaiYik
+        usesLorStyleFlow
           ? "STEP 3 START! TIME BUTTON IN GREEN ZONE (0/3)"
           : "STEP 3 START! HIT THE TARGET BUTTON IN THE GREEN ZONE",
         "rgba(128, 255, 114, 0.92)",
@@ -1411,8 +1436,8 @@ export function createGame({ canvas, startBtn, restartBtn, hud }) {
     const s = game.step3;
     if (!shouldRunStep3GameplayFlow()) return;
     if (!s.active || s.finishAnim) return;
-    const isLorKaiYik = game.currentDish?.name === "LOR KAI YIK";
-    const requiredHits = isLorKaiYik ? 3 : Math.max(1, Number(s.hitsNeed || 3));
+    const usesLorStyleFlow = ["LOR KAI YIK", "CURRY FENG"].includes(game.currentDish?.name);
+    const requiredHits = usesLorStyleFlow ? 3 : Math.max(1, Number(s.hitsNeed || 3));
 
     const inSweet = s.pointer >= s.sweetMin && s.pointer <= s.sweetMax;
     const correctCode = code === s.targetCode;
@@ -1932,6 +1957,11 @@ export function createGame({ canvas, startBtn, restartBtn, hud }) {
       return;
     }
 
+    if (shouldRunCurryStep3BraiseFlow()) {
+      startStep2Flow("step3");
+      return;
+    }
+
     if (shouldRunStep3IntroFlow()) {
       startStep3Intro();
       return;
@@ -2049,9 +2079,10 @@ export function createGame({ canvas, startBtn, restartBtn, hud }) {
     const codeToLabel = { KeyQ: "Q", KeyW: "W", KeyE: "E", KeyR: "R" };
     const toLabel = (code) => codeToLabel[code] || "?";
 
-    if (game.step2?.active && !game.step2?.intro) {
+    if (game.step2?.active) {
       const seq = Array.isArray(game.step2.comboSeq) ? game.step2.comboSeq : [];
-      return { label: "Sequence Preview", keys: seq.map(toLabel), index: game.step2.comboIndex | 0 };
+      const index = game.step2?.intro ? -1 : (game.step2.comboIndex | 0);
+      return { label: "Sequence Preview", keys: seq.map(toLabel), index };
     }
 
     const step = currentStep();

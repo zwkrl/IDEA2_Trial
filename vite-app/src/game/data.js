@@ -87,12 +87,28 @@ export const dishes = [
     culture: "Eurasian",
     ingredients: ["pork", "garlic", "ginger", "chili"],
     steps: [
-      { type: "prep", label: "Prep aromatics", uses: ["garlic","ginger"], counts: { garlic: 4, ginger: 4 } },
-      { type: "cook", label: "Fry aromatics ", time: 4.0, stirPerfectWindow: STIR_PERFECT },
-      { type: "serve", label: "Serve: press ENTER" },
-      { type: "action", label: "Add pork", uses: ["pork"], counts: { pork: 2 } },
-      { type: "cook", label: "Simmer curry ", time: 4.0, stirPerfectWindow: STIR_PERFECT },
-      { type: "serve", label: "Serve: press ENTER" }
+      {
+        type: "prep",
+        label: "Step 1: Prep the Aromatics - Garlic & Ginger (grab, chop, and scrape into bowl)",
+        uses: ["garlic", "ginger"],
+        counts: { garlic: 4, ginger: 4 }
+      },
+      {
+        type: "cook",
+        label: "Step 2: Fry the Aromatics Until Fragrant (add oil, add garlic+ginger, keep fragrance in zone)",
+        time: 7.0,
+        stirPerfectWindow: STIR_PERFECT
+      },
+      {
+        type: "action",
+        label: "Step 3: Add the Pork and Build the Curry (add chili + pork, then maintain simmer rhythm)",
+        uses: ["pork", "chili"],
+        counts: { pork: 2, chili: 2 }
+      },
+      {
+        type: "serve",
+        label: "Step 4: Ladle and Serve (finish plating chain and serve Curry Feng)"
+      }
     ]
   },
   {
