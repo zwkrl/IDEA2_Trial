@@ -1006,10 +1006,7 @@ export function drawBottomButtons(ctx, canvas, game, assets = {}, preview = null
   for (let i = 0; i < keys.length; i++) {
     const key = keys[i];
     const code = `Key${key}`;
-    const currentLabel = (preview && Array.isArray(preview.keys) && preview.index >= 0)
-      ? String(preview.keys[Math.min(preview.keys.length - 1, preview.index)] || "").toUpperCase()
-      : "";
-    const glow = Number(game?.keyGlow?.[code] || 0) > 0 || key === currentLabel;
+    const glow = Number(game?.keyGlow?.[code] || 0) > 0;
     drawButtonIcon(ctx, assets, key, startX + i * (rowSize + rowGap), rowY, rowSize, { glow });
   }
 
@@ -1085,6 +1082,8 @@ export function drawTopSequencePreview(ctx, canvas, assets = {}, preview = null,
 
 export function drawStep1Intro(ctx, canvas, step1, assets = {}) {
   const t = Number(step1?.introTimer || 0);
+  const isChineseStep1 = String(step1?.mode || "") === "chinese-chop";
+  const isLaksaStep1 = String(step1?.mode || "") === "laksa-paste";
 
   ctx.save();
   ctx.fillStyle = "rgba(0,0,0,0.68)";
@@ -1101,19 +1100,39 @@ export function drawStep1Intro(ctx, canvas, step1, assets = {}) {
 
   ctx.fillStyle = "#ffe066";
   ctx.font = "bold 44px Courier New";
-  ctx.fillText("Step 1: Crack & Make Paste", canvas.width / 2, panelY + 76);
+  ctx.fillText(
+    isChineseStep1
+      ? "Step 1: Prep the Garlic and Ginger"
+      : isLaksaStep1
+        ? "Step 1: Make the Laksa Chili Paste"
+        : "Step 1: Crack & Make Paste",
+    canvas.width / 2,
+    panelY + 76
+  );
 
   ctx.fillStyle = "#d7d7d7";
   ctx.font = "20px Courier New";
-  ctx.fillText("Get ready to crack buah keluak and pound the paste!", canvas.width / 2, panelY + 124);
+  ctx.fillText(
+    isChineseStep1
+      ? "Cutting board ready. Start with garlic, then ginger."
+      : isLaksaStep1
+        ? "Mortar ready. Complete 3 chili combos to make the paste."
+        : "Get ready to crack buah keluak and pound the paste!",
+    canvas.width / 2,
+    panelY + 124
+  );
 
-  const icon = assets?.smash_shell;
+  const icon = isChineseStep1
+    ? (assets?.garlic || assets?.ginger || assets?.smash_shell)
+    : isLaksaStep1
+      ? (assets?.laksa_mortar_empty || assets?.laksa_chillies || assets?.chili || assets?.smash_shell)
+      : assets?.smash_shell;
   const bounce = Math.sin((step1?.animT || 0) * 5.2) * 10;
   const iconSize = 92;
   const ix = canvas.width / 2 - iconSize / 2;
   const iy = panelY + 148 + bounce;
   if (icon) {
-    ctx.drawImage(icon, ix, iy, iconSize, iconSize * 0.72);
+    ctx.drawImage(icon, ix, iy, iconSize, (isChineseStep1 || isLaksaStep1) ? iconSize : iconSize * 0.72);
   } else {
     ctx.fillStyle = "#6f4b2e";
     ctx.beginPath();
@@ -1125,6 +1144,16 @@ export function drawStep1Intro(ctx, canvas, step1, assets = {}) {
   ctx.font = "16px Courier New";
   ctx.fillText(`Starting in ${Math.max(0, Math.ceil(t))}...`, canvas.width / 2, panelY + panelH - 28);
   ctx.restore();
+}
+
+function getChineseChopSprite(assets, target, stage) {
+  const safeStage = Math.max(0, Math.min(3, Number(stage || 0)));
+  if (target === "ginger") {
+    if (safeStage <= 0) return assets?.ginger || null;
+    return assets?.[`chop_ginger_${safeStage}`] || assets?.ginger || null;
+  }
+  if (safeStage <= 0) return assets?.garlic || null;
+  return assets?.[`chop_garlic_${safeStage}`] || assets?.garlic || null;
 }
 
 export function getStep2ButtonRects(canvas) {
@@ -1143,6 +1172,7 @@ export function getStep2ButtonRects(canvas) {
 
 export function drawStep2Intro(ctx, canvas, step2, assets = {}) {
   const t = Number(step2?.introTimer || 0);
+  const isChineseStep2 = String(step2?.mode || "") === "lor-braise";
 
   ctx.save();
   ctx.fillStyle = "rgba(0,0,0,0.74)";
@@ -1159,11 +1189,28 @@ export function drawStep2Intro(ctx, canvas, step2, assets = {}) {
 
   ctx.fillStyle = "#ffe066";
   ctx.font = "bold 44px Courier New";
-  ctx.fillText("Step 2: Start Cooking the Chicken", canvas.width / 2, panelY + 88);
+  ctx.fillText(
+    isChineseStep2 ? "Step 2: Add Chicken and Start the Braise" : "Step 2: Start Cooking the Chicken",
+    canvas.width / 2,
+    panelY + 88
+  );
 
   ctx.fillStyle = "#d7d7d7";
   ctx.font = "20px Courier New";
-  ctx.fillText("Prepare the pot, add paste, then add chicken.", canvas.width / 2, panelY + 138);
+  ctx.fillText(
+    isChineseStep2 ? "Metal pot ready. Add oil + clove, then chicken." : "Prepare the pot, add paste, then add chicken.",
+    canvas.width / 2,
+    panelY + 138
+  );
+
+  if (isChineseStep2) {
+    const pot = assets?.step2_pot || assets?.step2_chinese_pot_stage1 || assets?.step2_chinese_pot_stage2;
+    if (pot) {
+      const pw = 280;
+      const ph = 140;
+      ctx.drawImage(pot, canvas.width / 2 - pw / 2, panelY + 186, pw, ph);
+    }
+  }
 
   ctx.fillStyle = "#a7c7ff";
   ctx.font = "16px Courier New";
@@ -1173,6 +1220,228 @@ export function drawStep2Intro(ctx, canvas, step2, assets = {}) {
 }
 
 export function drawStep2Gameplay(ctx, canvas, step2, assets = {}) {
+  if (String(step2?.mode || "") === "lor-braise") {
+    const phaseText = {
+      addOilClove: "Complete sequence to add oil & clove",
+      addOilCloveAnim: "Adding oil & clove...",
+      addChicken: "Complete sequence to add chicken pieces",
+      addChickenAnim: "Adding chicken pieces...",
+      heat: "Tap in rhythm to keep ideal braise heat"
+    }[step2?.phase] || "Start the braise";
+
+    const hintText = {
+      addOilClove: "Follow the Q/W/E/R sequence",
+      addOilCloveAnim: "Oil and clove are pouring into the pot",
+      addChicken: "Follow the Q/W/E/R sequence",
+      addChickenAnim: "Chicken pieces are going into the pot",
+      heat: `Hold heat in green zone (${Math.max(0, Number(step2?.heatTimer || 0)).toFixed(1)}s)`
+    }[step2?.phase] || "";
+
+    const comboSeq = Array.isArray(step2?.comboSeq) ? step2.comboSeq : [];
+    const comboIndex = Math.max(0, Number(step2?.comboIndex || 0));
+
+    const potBase = assets?.step2_pot;
+    const potStage1 = assets?.step2_chinese_pot_stage1 || assets?.step2_pot_paste;
+    const potStage2 = assets?.step2_chinese_pot_stage2 || assets?.step2_pot_finished;
+    const potFinal = assets?.step2_pot_finished || potStage2 || potStage1 || potBase;
+    const oilBottle = assets?.step2_chinese_oil;
+    const clove = assets?.step2_chinese_clove;
+    const chicken = assets?.chicken;
+
+    ctx.save();
+    ctx.textAlign = "center";
+    ctx.textBaseline = "middle";
+
+    const instructionX = canvas.width / 2;
+    const instructionY = canvas.height - 172;
+    ctx.fillStyle = "rgba(0,0,0,0.52)";
+    ctx.fillRect(instructionX - 320, instructionY - 52, 640, 108);
+    ctx.strokeStyle = "rgba(255,255,255,0.2)";
+    ctx.strokeRect(instructionX - 320, instructionY - 52, 640, 108);
+
+    ctx.fillStyle = "#ffe066";
+    ctx.font = "bold 30px Courier New";
+    ctx.fillText("Step 2: Add Chicken and Start the Braise", instructionX, instructionY - 20);
+
+    ctx.fillStyle = "#d7d7d7";
+    ctx.font = "19px Courier New";
+    ctx.fillText(phaseText, instructionX, instructionY + 10);
+
+    ctx.fillStyle = "#a7c7ff";
+    ctx.font = "15px Courier New";
+    ctx.fillText(hintText, instructionX, instructionY + 36);
+
+    if ((step2?.phase === "addOilClove" || step2?.phase === "addChicken") && comboSeq.length) {
+      const labels = { KeyQ: "Q", KeyW: "W", KeyE: "E", KeyR: "R" };
+      const size = 68;
+      const gap = 12;
+      const shown = comboSeq.slice(0, Math.min(6, comboSeq.length));
+      const totalW = shown.length * size + Math.max(0, shown.length - 1) * gap;
+      const panelPad = 12;
+      const seqPanelW = totalW + panelPad * 2;
+      const seqPanelH = size + 28;
+      const panelX = canvas.width / 2 - seqPanelW / 2;
+      const panelY = 170;
+      const sy = panelY + 14;
+
+      ctx.fillStyle = "rgba(30,30,30,0.52)";
+      ctx.fillRect(panelX, panelY, seqPanelW, seqPanelH);
+      ctx.strokeStyle = "rgba(255,255,255,0.24)";
+      ctx.strokeRect(panelX, panelY, seqPanelW, seqPanelH);
+
+      let sx = panelX + panelPad;
+      for (let i = 0; i < shown.length; i++) {
+        const code = shown[i];
+        const key = labels[code] || "?";
+        const isDone = i < comboIndex;
+
+        ctx.save();
+        ctx.fillStyle = "rgba(255,255,255,0.08)";
+        ctx.fillRect(sx - 4, sy - 4, size + 8, size + 8);
+        ctx.strokeStyle = "rgba(255,255,255,0.18)";
+        ctx.strokeRect(sx - 4, sy - 4, size + 8, size + 8);
+        if (isDone) {
+          ctx.fillStyle = "rgba(128,255,114,0.16)";
+          ctx.fillRect(sx - 4, sy - 4, size + 8, size + 8);
+        }
+
+        drawButtonIcon(ctx, assets, key, sx, sy, size, { glow: isDone });
+        ctx.restore();
+        sx += size + gap;
+      }
+    }
+
+    const potCx = canvas.width / 2;
+    const potCy = canvas.height / 2;
+    const potW = 720;
+    const potH = 360;
+    const potX = potCx - potW / 2;
+    const potY = potCy - potH / 2;
+
+    const showStage1Pot = step2?.phase === "addChicken" || step2?.phase === "addChickenAnim";
+    const showStage2Pot = step2?.phase === "heat";
+    const potSprite = showStage2Pot
+      ? (potStage2 || potFinal || potStage1 || potBase)
+      : showStage1Pot
+        ? (potStage1 || potStage2 || potBase)
+        : (potBase || potStage1 || potStage2);
+
+    if (potSprite) {
+      ctx.fillStyle = "rgba(0,0,0,0.35)";
+      ctx.beginPath();
+      ctx.ellipse(potCx, potCy + potH * 0.45, potW * 0.4, 28, 0, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.drawImage(potSprite, potX, potY, potW, potH);
+    }
+
+    if (step2?.phase === "addOilCloveAnim") {
+      const progress = 1 - Math.max(0, Math.min(1, Number(step2?.transitionT || 0) / 0.9));
+      const ox = potX - 130 + progress * (potW * 0.46);
+      const oy = potY - 55 + progress * 150;
+      const cx = potX + potW + 18 - progress * (potW * 0.55);
+      const cy = potY - 24 + progress * 138;
+
+      if (oilBottle) {
+        ctx.save();
+        ctx.translate(ox, oy);
+        ctx.rotate(-0.5 + progress * 0.35);
+        ctx.drawImage(oilBottle, -88, -112, 176, 224);
+        ctx.restore();
+      }
+
+      if (clove) {
+        ctx.save();
+        ctx.translate(cx, cy);
+        ctx.rotate(-0.4 + progress * 0.4);
+        ctx.drawImage(clove, -74, -52, 148, 104);
+        ctx.restore();
+      }
+    }
+
+    if (step2?.phase === "addChickenAnim") {
+      const progress = 1 - Math.max(0, Math.min(1, Number(step2?.transitionT || 0) / 0.9));
+      const cx = potX - 110 + progress * (potW * 0.48);
+      const cy = potY - 14 + progress * 140;
+
+      if (chicken) {
+        ctx.save();
+        ctx.translate(cx, cy);
+        ctx.rotate(-0.35 + progress * 0.42);
+        ctx.drawImage(chicken, -94, -64, 188, 128);
+        ctx.restore();
+      }
+    }
+
+    if (step2?.phase === "heat") {
+      const t = step2?.animT || 0;
+      for (let i = 0; i < 10; i++) {
+        const bx = potX + 84 + ((i * 69 + t * 110) % (potW - 168));
+        const by = potY + 220 - ((t * 50 + i * 13) % 70);
+        const r = 2.4 + Math.sin(t * 8 + i * 0.7) * 1.2;
+        ctx.fillStyle = "rgba(230, 240, 255, 0.76)";
+        ctx.beginPath();
+        ctx.arc(bx, by, Math.max(1.4, r), 0, Math.PI * 2);
+        ctx.fill();
+      }
+
+      const heatLevel = Math.max(0, Math.min(1, Number(step2?.heatLevel || 0)));
+      const heatMin = Math.max(0, Math.min(1, Number(step2?.heatIdealMin ?? 0.45)));
+      const heatMax = Math.max(0, Math.min(1, Number(step2?.heatIdealMax ?? 0.62)));
+      const timerLeft = Math.max(0, Number(step2?.heatTimer || 0));
+      const timerDur = Math.max(0.1, Number(step2?.heatDuration || 7));
+      const timerP = Math.max(0, Math.min(1, timerLeft / timerDur));
+
+      const heatW = 440;
+      const heatH = 20;
+      const heatX = canvas.width / 2 - heatW / 2;
+      const heatY = potY - 22;
+      ctx.fillStyle = "rgba(255,255,255,0.14)";
+      ctx.fillRect(heatX, heatY, heatW, heatH);
+      ctx.fillStyle = "rgba(128,255,114,0.35)";
+      ctx.fillRect(heatX + heatW * heatMin, heatY, heatW * (heatMax - heatMin), heatH);
+      ctx.fillStyle = "rgba(255,120,80,0.9)";
+      ctx.fillRect(heatX, heatY, heatW * heatLevel, heatH);
+      ctx.strokeStyle = "rgba(255,255,255,0.45)";
+      ctx.strokeRect(heatX, heatY, heatW, heatH);
+
+      const timerW = 300;
+      const timerH = 14;
+      const timerX = canvas.width / 2 - timerW / 2;
+      const timerY = heatY - 24;
+      ctx.fillStyle = "rgba(255,255,255,0.14)";
+      ctx.fillRect(timerX, timerY, timerW, timerH);
+      ctx.fillStyle = "rgba(167,199,255,0.94)";
+      ctx.fillRect(timerX, timerY, timerW * timerP, timerH);
+      ctx.strokeStyle = "rgba(255,255,255,0.42)";
+      ctx.strokeRect(timerX, timerY, timerW, timerH);
+
+      ctx.fillStyle = "#a7c7ff";
+      ctx.font = "16px Courier New";
+      ctx.fillText(`${timerLeft.toFixed(1)}s`, canvas.width / 2, timerY - 12);
+    }
+
+    const actionPanelW = 760;
+    const actionPanelH = 64;
+    const actionPanelX = canvas.width / 2 - actionPanelW / 2;
+    const actionPanelY = 110;
+    ctx.fillStyle = "rgba(0,0,0,0.42)";
+    ctx.fillRect(actionPanelX, actionPanelY, actionPanelW, actionPanelH);
+    ctx.strokeStyle = "rgba(255,255,255,0.2)";
+    ctx.strokeRect(actionPanelX, actionPanelY, actionPanelW, actionPanelH);
+
+    const actionText = step2?.phase === "addOilClove" || step2?.phase === "addOilCloveAnim"
+      ? "Button: Add oil & clove to pot"
+      : step2?.phase === "addChicken" || step2?.phase === "addChickenAnim"
+        ? "Button: Add chicken pieces"
+        : "Heat phase: tap rhythm on Q/W/E/R";
+    ctx.fillStyle = "#ffe066";
+    ctx.font = "bold 22px Courier New";
+    ctx.fillText(actionText, canvas.width / 2, actionPanelY + 39);
+
+    ctx.restore();
+    return;
+  }
+
   const phaseText = {
     addPaste: "Complete combo to add paste",
     addPasteAnim: "Adding paste...",
@@ -1246,10 +1515,9 @@ export function drawStep2Gameplay(ctx, canvas, step2, assets = {}) {
       const code = shown[i];
       const key = labels[code] || "?";
       const isDone = i < comboIndex;
-      const isNext = i === comboIndex;
 
       ctx.save();
-      ctx.fillStyle = isNext ? "rgba(255,236,140,0.55)" : "rgba(255,255,255,0.08)";
+      ctx.fillStyle = "rgba(255,255,255,0.08)";
       ctx.fillRect(sx - 4, sy - 4, size + 8, size + 8);
       ctx.strokeStyle = "rgba(255,255,255,0.18)";
       ctx.strokeRect(sx - 4, sy - 4, size + 8, size + 8);
@@ -1258,7 +1526,7 @@ export function drawStep2Gameplay(ctx, canvas, step2, assets = {}) {
         ctx.fillRect(sx - 4, sy - 4, size + 8, size + 8);
       }
 
-      drawButtonIcon(ctx, assets, key, sx, sy, size, { glow: isDone || isNext });
+      drawButtonIcon(ctx, assets, key, sx, sy, size, { glow: isDone });
 
       ctx.fillStyle = "rgba(0,0,0,0.72)";
       ctx.fillRect(sx + size - 20, sy + size - 16, 18, 14);
@@ -1270,19 +1538,6 @@ export function drawStep2Gameplay(ctx, canvas, step2, assets = {}) {
       ctx.restore();
 
       sx += size + gap;
-    }
-
-    if (comboIndex >= 0 && comboIndex < shown.length) {
-      const nx = panelX + panelPad + comboIndex * (size + gap);
-      ctx.fillStyle = "rgba(255,224,102,0.95)";
-      ctx.fillRect(nx, sy - 18, size, 14);
-      ctx.strokeStyle = "rgba(0,0,0,0.55)";
-      ctx.strokeRect(nx, sy - 18, size, 14);
-      ctx.fillStyle = "#111";
-      ctx.font = "bold 10px Courier New";
-      ctx.textAlign = "center";
-      ctx.textBaseline = "middle";
-      ctx.fillText("NEXT", nx + size / 2, sy - 11);
     }
 
     ctx.restore();
@@ -1401,6 +1656,7 @@ export function drawStep2Gameplay(ctx, canvas, step2, assets = {}) {
 
 export function drawStep3Intro(ctx, canvas, step3Intro, assets = {}) {
   const t = Number(step3Intro?.timer || 0);
+  const isLorKaiYik = String(step3Intro?.dishName || "") === "LOR KAI YIK";
 
   ctx.save();
   ctx.fillStyle = "rgba(0,0,0,0.74)";
@@ -1417,11 +1673,17 @@ export function drawStep3Intro(ctx, canvas, step3Intro, assets = {}) {
 
   ctx.fillStyle = "#ffe066";
   ctx.font = "bold 40px Courier New";
-  ctx.fillText("Step 3: Stir Carefully", canvas.width / 2, panelY + 82);
+  ctx.fillText(isLorKaiYik ? "Step 3: Slow Simmer Until Tender" : "Step 3: Stir Carefully", canvas.width / 2, panelY + 82);
 
   ctx.fillStyle = "#d7d7d7";
   ctx.font = "18px Courier New";
-  ctx.fillText("Press the target colored button in the green zone.", canvas.width / 2, panelY + 126);
+  ctx.fillText(
+    isLorKaiYik
+      ? "Time the button in the green zone 3 times, then stir."
+      : "Press the target colored button in the green zone.",
+    canvas.width / 2,
+    panelY + 126
+  );
 
   const barW = Math.min(520, panelW - 180);
   const barH = 18;
@@ -1455,9 +1717,14 @@ export function drawStep3Intro(ctx, canvas, step3Intro, assets = {}) {
 
 export function drawStep3Gameplay(ctx, canvas, game, assets = {}, yTop = 140, bottomUiTop = null) {
   const s3 = game.step3 || {};
+  const isLorKaiYik = String(game?.currentDish?.name || "") === "LOR KAI YIK";
 
-  const pot = assets?.step2_pot_finished || assets?.step2_pot_paste || assets?.step2_pot;
-  const spoon = assets?.scoop_spoon_full || assets?.scoop_spoon_half || assets?.scoop_spoon_empty;
+  const pot = isLorKaiYik
+    ? (assets?.step2_chinese_pot_stage2 || assets?.step2_pot_finished || assets?.step2_pot)
+    : (assets?.step2_pot_finished || assets?.step2_pot_paste || assets?.step2_pot);
+  const spoon = isLorKaiYik
+    ? (assets?.scoop_spoon_stir || assets?.scoop_spoon_empty)
+    : (assets?.scoop_spoon_full || assets?.scoop_spoon_half || assets?.scoop_spoon_empty);
 
   const potW = 720;
   const potH = 360;
@@ -1533,11 +1800,13 @@ export function drawStep3Gameplay(ctx, canvas, game, assets = {}, yTop = 140, bo
   }
 
   const stirAnim = Number(s3.stirPhase || 0);
-  if (spoon && s3.finishAnim) {
-    const angle = -0.55 + Math.sin(stirAnim * 2.4) * 0.42 * 1.9;
-    const radius = 102 + Math.sin(stirAnim * 3.3) * 10;
+  const showLiveStir = !!spoon && s3.finishAnim;
+  if (showLiveStir) {
+    const stirBoost = s3.finishAnim ? 1.0 : 0.52;
+    const angle = -0.55 + Math.sin(stirAnim * 2.4) * 0.42 * (1.15 + stirBoost);
+    const radius = 96 + Math.sin(stirAnim * 3.3) * (8 + stirBoost * 4);
     const sx = canvas.width / 2 + Math.cos(stirAnim * 2.2) * radius;
-    const sy = potY + potH * 0.38 + Math.sin(stirAnim * 2.2) * 20;
+    const sy = potY + potH * 0.38 + Math.sin(stirAnim * 2.2) * (14 + stirBoost * 8);
 
     ctx.save();
     ctx.translate(sx, sy);
@@ -1558,12 +1827,12 @@ export function drawStep3Gameplay(ctx, canvas, game, assets = {}, yTop = 140, bo
   ctx.font = "16px Courier New";
   const done = Math.max(0, Number(s3.hitsDone || 0));
   const need = Math.max(1, Number(s3.hitsNeed || 3));
-  ctx.fillText(`Timed Hits ${done}/${need}`, canvas.width / 2, infoY + 30);
+  ctx.fillText(isLorKaiYik ? `Simmer Timing ${done}/${need}` : `Timed Hits ${done}/${need}`, canvas.width / 2, infoY + 30);
 
   if (s3.finishAnim) {
     ctx.fillStyle = "rgba(128,255,114,0.92)";
     ctx.font = "bold 26px Courier New";
-    ctx.fillText("FINISHING STIR...", canvas.width / 2, canvas.height - 96);
+    ctx.fillText(isLorKaiYik ? "STIRRING TO FINISH..." : "FINISHING STIR...", canvas.width / 2, canvas.height - 96);
   }
 
   ctx.restore();
@@ -1571,6 +1840,7 @@ export function drawStep3Gameplay(ctx, canvas, game, assets = {}, yTop = 140, bo
 
 export function drawStep4Intro(ctx, canvas, step4Intro, assets = {}) {
   const t = Number(step4Intro?.timer || 0);
+  const isLorKaiYik = String(step4Intro?.dishName || "") === "LOR KAI YIK";
 
   ctx.save();
   ctx.fillStyle = "rgba(0,0,0,0.74)";
@@ -1587,11 +1857,21 @@ export function drawStep4Intro(ctx, canvas, step4Intro, assets = {}) {
 
   ctx.fillStyle = "#ffe066";
   ctx.font = "bold 40px Courier New";
-  ctx.fillText("Step 4: Plate and Serve Your Ayam Buah Keluak!", canvas.width / 2, panelY + 88);
+  ctx.fillText(
+    isLorKaiYik ? "Step 4: Plate and Serve Lor Kai Yik!" : "Step 4: Plate and Serve Your Ayam Buah Keluak!",
+    canvas.width / 2,
+    panelY + 88
+  );
 
   ctx.fillStyle = "#d7d7d7";
   ctx.font = "20px Courier New";
-  ctx.fillText("Complete the 3-button combo in 5 seconds to serve.", canvas.width / 2, panelY + 140);
+  ctx.fillText(
+    isLorKaiYik
+      ? "Serving bowl ready. Add rice and stew, then serve."
+      : "Complete the 3-button combo in 5 seconds to serve.",
+    canvas.width / 2,
+    panelY + 140
+  );
 
   ctx.fillStyle = "#a7c7ff";
   ctx.font = "16px Courier New";
@@ -1602,14 +1882,24 @@ export function drawStep4Intro(ctx, canvas, step4Intro, assets = {}) {
 
 export function drawStep4Gameplay(ctx, canvas, game, assets = {}, yTop = 140, bottomUiTop = null) {
   const s4 = game.step4 || {};
-  const pot = assets?.step2_pot_finished || assets?.step2_pot_paste || assets?.step2_pot;
-  const spoon = assets?.scoop_spoon_full || assets?.scoop_spoon_half || assets?.scoop_spoon_empty;
-  const serve = assets?.step4_serve;
+  const isLorKaiYik = String(game?.currentDish?.name || "") === "LOR KAI YIK";
+  const pot = isLorKaiYik
+    ? (assets?.step2_chinese_pot_stage2 || assets?.step2_pot_finished || assets?.step2_pot)
+    : (assets?.step2_pot_finished || assets?.step2_pot_paste || assets?.step2_pot);
+  const ricePlate = isLorKaiYik ? assets?.rice_plate : null;
+  const spoon = isLorKaiYik
+    ? (assets?.scoop_spoon_empty || assets?.scoop_spoon_stir)
+    : (assets?.scoop_spoon_full || assets?.scoop_spoon_half || assets?.scoop_spoon_empty);
+  const serve = isLorKaiYik ? (assets?.["dish_lor-kai-yik"] || assets?.step4_serve) : assets?.step4_serve;
 
   const potW = 460;
   const potH = 250;
-  const potX = canvas.width / 2 - potW / 2;
-  const potY = canvas.height / 2 - potH / 2 - 18;
+  const potX = canvas.width / 2 - potW / 2 + (isLorKaiYik ? 260 : 0);
+  const potY = canvas.height / 2 - potH / 2 - (isLorKaiYik ? 96 : 18);
+  const plateW = isLorKaiYik ? 440 : 430;
+  const plateH = isLorKaiYik ? 300 : 290;
+  const plateX = canvas.width / 2 - plateW / 2;
+  const plateY = isLorKaiYik ? (canvas.height / 2 - plateH / 2 + 40) : (canvas.height / 2 - 61);
 
   ctx.save();
   ctx.textAlign = "center";
@@ -1634,6 +1924,15 @@ export function drawStep4Gameplay(ctx, canvas, game, assets = {}, yTop = 140, bo
     ctx.ellipse(potX + potW * 0.5, potY + potH * 0.92, potW * 0.36, 20, 0, 0, Math.PI * 2);
     ctx.fill();
     ctx.drawImage(pot, potX, potY, potW, potH);
+  }
+
+  if (isLorKaiYik && s4.phase !== "final") {
+    if (ricePlate) {
+      ctx.drawImage(ricePlate, plateX, plateY, plateW, plateH);
+    } else {
+      ctx.fillStyle = "rgba(255,255,255,0.14)";
+      ctx.fillRect(plateX, plateY, plateW, plateH);
+    }
   }
 
   const comboSeq = Array.isArray(s4.comboSeq) ? s4.comboSeq : [];
@@ -1704,10 +2003,6 @@ export function drawStep4Gameplay(ctx, canvas, game, assets = {}, yTop = 140, bo
   }
 
   if (spoon && (s4.phase === "animToPot" || s4.phase === "animToPlate")) {
-    const plateX = canvas.width / 2 - 215;
-    const plateY = canvas.height / 2 - 61;
-    const plateW = 430;
-    const plateH = 290;
     let sx = plateX + plateW * 0.5;
     let sy = plateY + plateH * 0.4;
     let rot = -0.55;
@@ -1754,8 +2049,8 @@ export function drawStep4Gameplay(ctx, canvas, game, assets = {}, yTop = 140, bo
 
   if (s4.phase === "final") {
     if (serve) {
-      const fw = 520;
-      const fh = 360;
+      const fw = isLorKaiYik ? 560 : 520;
+      const fh = isLorKaiYik ? 390 : 360;
       ctx.drawImage(serve, canvas.width / 2 - fw / 2, canvas.height / 2 - fh / 2 + 40, fw, fh);
     }
     ctx.fillStyle = "rgba(128,255,114,0.95)";
@@ -1770,6 +2065,252 @@ export function drawStep4Gameplay(ctx, canvas, game, assets = {}, yTop = 140, bo
 }
 
 export function drawStep1Gameplay(ctx, canvas, step1, assets = {}) {
+  if (String(step1?.mode || "") === "laksa-paste") {
+    const phase = String(step1?.phase || "addChili");
+    const chiliCount = Math.max(0, Number(step1?.chiliCount || 0));
+    const chiliNeed = Math.max(1, Number(step1?.chiliNeed || 3));
+    const comboSeq = Array.isArray(step1?.comboSeq) ? step1.comboSeq : [];
+    const comboIndex = Math.max(0, Number(step1?.comboIndex || 0));
+
+    const phaseText = {
+      addChili: "Complete sequence to add chilies into mortar",
+      grindDoneAnim: "Chili paste complete"
+    }[phase] || "Make the chili paste";
+
+    const hintText = {
+      addChili: `Chilies added: ${chiliCount}/${chiliNeed}`,
+      grindDoneAnim: "Switching to grinded chili mortar"
+    }[phase] || "Use Q/W/E/R";
+
+    const instructionX = canvas.width / 2;
+    const instructionY = canvas.height - 172;
+
+    const mortarEmpty = assets?.laksa_mortar_empty;
+    const mortarFull = assets?.laksa_mortar_full;
+    const chilies = assets?.laksa_chillies || assets?.chili;
+
+    const bowlCx = canvas.width / 2;
+    const bowlCy = canvas.height / 2 + 42;
+    const bowlW = 540;
+    const bowlH = 290;
+    const bowlX = bowlCx - bowlW / 2;
+    const bowlY = bowlCy - bowlH / 2;
+
+    ctx.save();
+    ctx.textAlign = "center";
+    ctx.textBaseline = "middle";
+
+    ctx.fillStyle = "rgba(0,0,0,0.52)";
+    ctx.fillRect(instructionX - 310, instructionY - 52, 620, 108);
+    ctx.strokeStyle = "rgba(255,255,255,0.2)";
+    ctx.strokeRect(instructionX - 310, instructionY - 52, 620, 108);
+
+    ctx.fillStyle = "#ffe066";
+    ctx.font = "bold 30px Courier New";
+    ctx.fillText("Step 1: Make the Laksa Chili Paste", instructionX, instructionY - 20);
+
+    ctx.fillStyle = "#d7d7d7";
+    ctx.font = "19px Courier New";
+    ctx.fillText(phaseText, instructionX, instructionY + 10);
+
+    ctx.fillStyle = "#a7c7ff";
+    ctx.font = "15px Courier New";
+    ctx.fillText(hintText, instructionX, instructionY + 36);
+
+    ctx.fillStyle = "rgba(0,0,0,0.35)";
+    ctx.beginPath();
+    ctx.ellipse(bowlCx, bowlCy + bowlH * 0.42, bowlW * 0.36, 24, 0, 0, Math.PI * 2);
+    ctx.fill();
+
+    if (phase === "grindDoneAnim" && mortarFull) {
+      ctx.drawImage(mortarFull, bowlX, bowlY, bowlW, bowlH);
+    } else if (mortarEmpty) {
+      ctx.drawImage(mortarEmpty, bowlX, bowlY, bowlW, bowlH);
+    } else {
+      ctx.fillStyle = "rgba(90,90,90,0.85)";
+      ctx.beginPath();
+      ctx.ellipse(bowlCx, bowlCy + 12, bowlW * 0.34, bowlH * 0.2, 0, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.fillStyle = "rgba(68,68,68,0.92)";
+      ctx.beginPath();
+      ctx.ellipse(bowlCx, bowlCy + 36, bowlW * 0.28, bowlH * 0.16, 0, 0, Math.PI * 2);
+      ctx.fill();
+    }
+
+    if (phase === "addChili" && chilies && Number(step1?.chiliDropT || 0) > 0) {
+      const spriteW = 122;
+      const spriteH = 92;
+      const t = Math.max(0, Math.min(1, 1 - Number(step1?.chiliDropT || 0) / 0.55));
+      const sx = bowlCx - spriteW / 2;
+      const startY = bowlY - 86;
+      const endY = bowlY + 12;
+      const sy = startY + (endY - startY) * t;
+      ctx.drawImage(chilies, sx, sy, spriteW, spriteH);
+    }
+
+    if (phase === "addChili" && comboSeq.length) {
+      const labels = { KeyQ: "Q", KeyW: "W", KeyE: "E", KeyR: "R" };
+      const size = 60;
+      const seqGap = 10;
+      const shown = comboSeq.slice(0, Math.min(6, comboSeq.length));
+      const totalW = shown.length * size + Math.max(0, shown.length - 1) * seqGap;
+      const panelPad = 12;
+      const panelW = totalW + panelPad * 2;
+      const panelH = size + 24;
+      const panelX = canvas.width / 2 - panelW / 2;
+      const panelY = 180;
+      let sx = panelX + panelPad;
+      const sy = panelY + 12;
+
+      ctx.fillStyle = "rgba(30,30,30,0.52)";
+      ctx.fillRect(panelX, panelY, panelW, panelH);
+      ctx.strokeStyle = "rgba(255,255,255,0.24)";
+      ctx.strokeRect(panelX, panelY, panelW, panelH);
+
+      for (let i = 0; i < shown.length; i++) {
+        const key = labels[shown[i]] || "?";
+        const isDone = i < comboIndex;
+        ctx.fillStyle = "rgba(255,255,255,0.08)";
+        ctx.fillRect(sx - 4, sy - 4, size + 8, size + 8);
+        ctx.strokeStyle = "rgba(255,255,255,0.18)";
+        ctx.strokeRect(sx - 4, sy - 4, size + 8, size + 8);
+        if (isDone) {
+          ctx.fillStyle = "rgba(128,255,114,0.16)";
+          ctx.fillRect(sx - 4, sy - 4, size + 8, size + 8);
+        }
+        drawButtonIcon(ctx, assets, key, sx, sy, size, { glow: isDone });
+        sx += size + seqGap;
+      }
+    }
+
+    const barW = Math.min(560, canvas.width - 260);
+    const barH = 18;
+    const bx = canvas.width / 2 - barW / 2;
+    const by = 152;
+    const p = phase === "grindDoneAnim"
+      ? 1
+      : Math.max(0, Math.min(1, chiliCount / chiliNeed));
+
+    ctx.fillStyle = "rgba(255,255,255,0.18)";
+    ctx.fillRect(bx, by, barW, barH);
+    ctx.fillStyle = "rgba(128,255,114,0.92)";
+    ctx.fillRect(bx, by, barW * p, barH);
+    ctx.strokeStyle = "rgba(255,255,255,0.35)";
+    ctx.strokeRect(bx, by, barW, barH);
+
+    ctx.fillStyle = "#a7c7ff";
+    ctx.font = "16px Courier New";
+    ctx.fillText(`${Math.floor(p * 100)}%`, canvas.width / 2, by + 34);
+
+    ctx.restore();
+    return;
+  }
+
+  if (String(step1?.mode || "") === "chinese-chop") {
+    const panelW = Math.min(980, canvas.width - 90);
+    const panelH = 360;
+    const instructionX = canvas.width / 2;
+    const instructionY = canvas.height - 172;
+
+    const targets = Array.isArray(step1?.chopTargets) ? step1.chopTargets : ["garlic", "ginger"];
+    const targetIndex = Math.max(0, Math.min(targets.length - 1, Number(step1?.chopTargetIndex || 0)));
+    const target = targets[targetIndex] || "garlic";
+    const targetLabel = String(target).toUpperCase();
+    const stage = Math.max(0, Math.min(3, Number(step1?.chopStage || 0)));
+    const phase = String(step1?.phase || "chop");
+
+    const phaseText = phase === "sweep"
+      ? `${targetLabel} chopped. Sweep into bowl.`
+      : `Spam buttons to chop ${targetLabel}`;
+    const hintText = phase === "sweep"
+      ? "Press GREEN button to sweep"
+      : `Chop stage ${Math.max(0, stage)}/3`;
+
+    const board = assets?.smash_board;
+    const boardW = 520;
+    const boardH = 300;
+    const boardX = canvas.width / 2 - boardW / 2;
+    const boardY = canvas.height / 2 - boardH / 2 + 40;
+
+    const ingredientSprite = getChineseChopSprite(assets, target, stage);
+    const ingredientW = 180;
+    const ingredientH = 132;
+    const ingredientX = canvas.width / 2 - ingredientW / 2;
+    const ingredientY = boardY + boardH / 2 - ingredientH / 2 - 12;
+
+    ctx.save();
+    ctx.textAlign = "center";
+    ctx.textBaseline = "middle";
+
+    ctx.fillStyle = "rgba(0,0,0,0.52)";
+    ctx.fillRect(instructionX - 270, instructionY - 52, 540, 108);
+    ctx.strokeStyle = "rgba(255,255,255,0.2)";
+    ctx.strokeRect(instructionX - 270, instructionY - 52, 540, 108);
+
+    ctx.fillStyle = "#ffe066";
+    ctx.font = "bold 30px Courier New";
+    ctx.fillText("Step 1: Prep the Garlic and Ginger", instructionX, instructionY - 20);
+
+    ctx.fillStyle = "#d7d7d7";
+    ctx.font = "19px Courier New";
+    ctx.fillText(phaseText, instructionX, instructionY + 10);
+    ctx.fillStyle = "#a7c7ff";
+    ctx.font = "15px Courier New";
+    ctx.fillText(hintText, instructionX, instructionY + 36);
+
+    if (board) ctx.drawImage(board, boardX, boardY, boardW, boardH);
+    else {
+      ctx.fillStyle = "rgba(255,255,255,0.12)";
+      ctx.fillRect(boardX, boardY, boardW, boardH);
+    }
+
+    if (ingredientSprite) {
+      ctx.drawImage(ingredientSprite, ingredientX, ingredientY, ingredientW, ingredientH);
+    }
+
+    if (phase === "sweep") {
+      const bowl = assets?.chopped_bowl;
+      const bowlW = 255;
+      const bowlH = 180;
+      const bowlX = boardX + boardW + 40;
+      const bowlY = boardY + 56;
+
+      if (bowl) {
+        ctx.drawImage(bowl, bowlX, bowlY, bowlW, bowlH);
+      } else {
+        ctx.fillStyle = "rgba(255,255,255,0.18)";
+        ctx.fillRect(bowlX, bowlY, bowlW, bowlH);
+      }
+
+      ctx.fillStyle = "#a7c7ff";
+      ctx.font = "27px Courier New";
+      ctx.fillText("Sweep into bowl", bowlX + bowlW / 2, bowlY - 24);
+      drawButtonIcon(ctx, assets, "W", bowlX + bowlW / 2 - 45, bowlY - 16, 90, { glow: true });
+    }
+
+    if (phase === "chop") {
+      const barW = Math.min(560, panelW - 120);
+      const barH = 18;
+      const bx = canvas.width / 2 - barW / 2;
+      const by = 168;
+      const p = Math.max(0, Math.min(1, Number(step1?.progress || 0)));
+
+      ctx.fillStyle = "rgba(255,255,255,0.18)";
+      ctx.fillRect(bx, by, barW, barH);
+      ctx.fillStyle = "rgba(128,255,114,0.92)";
+      ctx.fillRect(bx, by, barW * p, barH);
+      ctx.strokeStyle = "rgba(255,255,255,0.35)";
+      ctx.strokeRect(bx, by, barW, barH);
+
+      ctx.fillStyle = "#a7c7ff";
+      ctx.font = "16px Courier New";
+      ctx.fillText(`${Math.floor(p * 100)}%`, canvas.width / 2, by + 34);
+    }
+
+    ctx.restore();
+    return;
+  }
+
   const panelW = Math.min(980, canvas.width - 90);
   const panelH = 360;
   const panelX = (canvas.width - panelW) / 2;
