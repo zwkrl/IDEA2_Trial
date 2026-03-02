@@ -43,7 +43,7 @@ export const dishes = [
       {
         type: "combo",
         process: "Process 1: Smash & Prep Keluak",
-        label: "Hit random 8-beat chop/mash combos (QWER). Fast rhythm = smooth paste.",
+        label: "Hit random 8-beat chop/mash combos. Fast rhythm = smooth paste.",
         comboMode: "smash",
         targetBeats: 8,
         time: 10,

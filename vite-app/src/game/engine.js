@@ -4,6 +4,7 @@ import { dishes, keyLabels, PENALTY, ingredientPool } from "./data.js";
 import {
   drawBackground,
   drawTopStack,
+  drawHeroAlert,
   drawComboFlames,
   drawPlate,
   drawProcessOverlay,
@@ -102,6 +103,14 @@ export function createGame({ canvas, startBtn, restartBtn, hud }) {
       loadImage("btn_e", "/assets/ui/yellow-btn.png"),
       loadImage("btn_r", "/assets/ui/white-btn.png"),
       loadImage("rice_plate", "/assets/ui/rice_plate.png"),
+      loadImageVariants("chinese_plate", [
+        "/assets/ui/chinese_plate.png",
+        "/assets/ui/chinese-plate.png"
+      ]),
+      loadImageVariants("curry_plate", [
+        "/assets/ui/curry_plate.png",
+        "/assets/ui/curry-plate.png"
+      ]),
       loadImageVariants("smash_pestle", [
         "/assets/process1/pestle.png",
         "/assets/process1/pestle (1).png"
@@ -2391,7 +2400,7 @@ export function createGame({ canvas, startBtn, restartBtn, hud }) {
     game.cookIconsDone = seq.map(() => false);
     game.cookIconJitter = seq.map(() => 0);
 
-    setAlert("COOK: match the icons (QWER)", "rgba(255, 224, 102, 0.95)", 0.9);
+    setAlert("COOK: match the icon sequence", "rgba(255, 224, 102, 0.95)", 0.9);
   }
 
   function advanceStep() {
@@ -2426,7 +2435,7 @@ export function createGame({ canvas, startBtn, restartBtn, hud }) {
     const step = currentStep();
     if (step) {
       if (step.type === "serve") setAlert("SERVE: press GREEN BUTTON", "rgba(128, 255, 114, 0.92)", 0.9);
-      else if (step.type === "cook") setAlert("COOK: match the icons (QWER)", "rgba(255, 224, 102, 0.90)", 0.9);
+      else if (step.type === "cook") setAlert("COOK: match the icon sequence", "rgba(255, 224, 102, 0.90)", 0.9);
       else if (step.type === "combo") setAlert(`${step.process || "COMBO PROCESS"}`, "rgba(255, 224, 102, 0.90)", 0.9);
       else setAlert(`NEXT: ${step.label}`, "rgba(255, 224, 102, 0.90)", 0.9);
     }
@@ -2459,7 +2468,7 @@ export function createGame({ canvas, startBtn, restartBtn, hud }) {
     game.endRecorded = false;
 
     startBtn.style.display = "none";
-    restartBtn.style.display = "block";
+    restartBtn.style.display = "none";
 
     loadDish(selectedDish);
     updateHUD();
@@ -3043,6 +3052,7 @@ function handlePrepOrActionPress(pressedIngredient) {
         drawStep4Gameplay(ctx, canvas, game, assets, uiBottomY, bottomUiTop);
       } else if (shouldRunStep3GameplayFlow() || (game.step3.active && String(game.step3?.mode || "") === "laksa-broth")) {
         drawStep3Gameplay(ctx, canvas, game, assets, uiBottomY, bottomUiTop);
+        drawHeroAlert(ctx, canvas, alertState, 106);
       } else {
         let y = uiBottomY;
         y += drawComboFlames(ctx, canvas, game, y) + 10;
