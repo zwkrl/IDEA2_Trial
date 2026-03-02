@@ -2678,6 +2678,8 @@ export function drawStep4Gameplay(ctx, canvas, game, assets = {}, yTop = 140, bo
 
   const dishName = String(game?.currentDish?.name || "");
   const usesLorStyleFlow = ["LOR KAI YIK", "CURRY FENG"].includes(dishName);
+  const isAyamBuahKeluak = dishName === "AYAM BUAH KELUAK";
+  const usesRightPotLayout = usesLorStyleFlow || isAyamBuahKeluak;
   const isCurryFeng = dishName === "CURRY FENG";
   const dishSlug = slugifyDishName(game?.currentDish?.name || "");
   const dishArt = assets?.[`dish_${dishSlug}`] || assets?.[`dish-${dishSlug}`];
@@ -2696,16 +2698,16 @@ export function drawStep4Gameplay(ctx, canvas, game, assets = {}, yTop = 140, bo
   const spoon = usesLorStyleFlow
     ? (assets?.scoop_spoon_empty || assets?.scoop_spoon_stir)
     : (assets?.scoop_spoon_full || assets?.scoop_spoon_half || assets?.scoop_spoon_empty);
-  const serve = usesLorStyleFlow ? (dishArt || assets?.step4_serve) : assets?.step4_serve;
+  const serve = usesRightPotLayout ? (dishArt || assets?.step4_serve) : assets?.step4_serve;
 
   const potW = 460;
   const potH = 250;
-  const potX = canvas.width / 2 - potW / 2 + (usesLorStyleFlow ? 260 : 0);
-  const potY = canvas.height / 2 - potH / 2 - (usesLorStyleFlow ? 96 : 18);
+  const potX = canvas.width / 2 - potW / 2 + (usesRightPotLayout ? 260 : 0);
+  const potY = canvas.height / 2 - potH / 2 - (usesRightPotLayout ? 96 : 18);
   const plateW = 440;
   const plateH = 300;
   const plateX = canvas.width / 2 - plateW / 2;
-  const plateY = usesLorStyleFlow ? (canvas.height / 2 - plateH / 2 + 40) : (canvas.height / 2 - 61);
+  const plateY = usesRightPotLayout ? (canvas.height / 2 - plateH / 2 + 40) : (canvas.height / 2 - 61);
 
   ctx.save();
   ctx.textAlign = "center";
@@ -2733,8 +2735,14 @@ export function drawStep4Gameplay(ctx, canvas, game, assets = {}, yTop = 140, bo
   }
 
   if (s4.phase !== "final") {
-    if (ricePlate) {
-      drawImageContain(ctx, ricePlate, plateX, plateY, plateW, plateH);
+    const animToPlateProgress = s4.phase === "animToPlate"
+      ? Math.max(0, Math.min(1, Number(s4.phaseT || 0) / 0.85))
+      : 0;
+    const swapToDishPng = isAyamBuahKeluak && s4.phase === "animToPlate" && animToPlateProgress >= 0.9;
+    const plateSprite = swapToDishPng ? (dishArt || ricePlate) : ricePlate;
+
+    if (plateSprite) {
+      drawImageContain(ctx, plateSprite, plateX, plateY, plateW, plateH);
     } else {
       ctx.fillStyle = "rgba(255,255,255,0.14)";
       ctx.fillRect(plateX, plateY, plateW, plateH);
