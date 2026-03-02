@@ -1245,6 +1245,66 @@ export function getStep2ButtonRects(canvas) {
 
 export function drawStep2Intro(ctx, canvas, step2, assets = {}) {
   const t = Number(step2?.introTimer || 0);
+  if (String(step2?.mode || "") === "laksa-saute") {
+    const pan = assets?.step2_eurasian_fry_pan || assets?.laksa_step2_oilpaste_pan || assets?.step2_pot;
+    const demoT = Number(step2?.animT || 0);
+
+    ctx.save();
+    ctx.fillStyle = "rgba(0,0,0,0.74)";
+    ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+    const panelW = Math.min(920, canvas.width - 120);
+    const panelH = 280;
+    const panelX = (canvas.width - panelW) / 2;
+    const panelY = canvas.height / 2 - panelH / 2;
+    drawPanel(ctx, panelX, panelY, panelW, panelH, 0.74);
+
+    ctx.textAlign = "center";
+    ctx.textBaseline = "middle";
+
+    ctx.fillStyle = "#ffe066";
+    ctx.font = "bold 40px Courier New";
+    ctx.fillText("Step 2: Sauté the Chili Paste Until Fragrant.", canvas.width / 2, panelY + 64);
+
+    ctx.fillStyle = "#d7d7d7";
+    ctx.font = "20px Courier New";
+    ctx.fillText("Pan with oil. Keep heat pointer in the glowing sweet spot.", canvas.width / 2, panelY + 102);
+
+    const heatW = 420;
+    const heatH = 18;
+    const heatX = canvas.width / 2 - heatW / 2;
+    const heatY = panelY + 130;
+    const sweetMin = Number(step2?.heatSweetMin ?? 0.44);
+    const sweetMax = Number(step2?.heatSweetMax ?? 0.56);
+
+    ctx.fillStyle = "rgba(255,255,255,0.14)";
+    ctx.fillRect(heatX, heatY, heatW, heatH);
+    ctx.save();
+    ctx.shadowColor = "rgba(128,255,114,0.95)";
+    ctx.shadowBlur = 18;
+    ctx.fillStyle = "rgba(128,255,114,0.88)";
+    ctx.fillRect(heatX + heatW * sweetMin, heatY, heatW * (sweetMax - sweetMin), heatH);
+    ctx.restore();
+    ctx.strokeStyle = "rgba(255,255,255,0.42)";
+    ctx.strokeRect(heatX, heatY, heatW, heatH);
+
+    const demoX = heatX + heatW * (0.5 + Math.sin(demoT * 2.8) * 0.2);
+    ctx.fillStyle = "rgba(255,224,102,0.96)";
+    ctx.fillRect(demoX - 4, heatY - 7, 8, heatH + 14);
+
+    if (pan) {
+      const pw = 520;
+      const ph = 280;
+      drawImageContain(ctx, pan, canvas.width / 2 - pw / 2, panelY + 142, pw, ph);
+    }
+
+    ctx.fillStyle = "#a7c7ff";
+    ctx.font = "16px Courier New";
+    ctx.fillText(`Starting in ${Math.max(0, Math.ceil(t))}...`, canvas.width / 2, panelY + panelH - 28);
+    ctx.restore();
+    return;
+  }
+
   const isChineseStep2 = String(step2?.mode || "") === "lor-braise";
   const isCurryFeng = String(step2?.dishName || "") === "CURRY FENG";
   const isCurryStep3Braise = isCurryFeng && String(step2?.braiseVariant || "") === "chili-pork";
@@ -1305,6 +1365,207 @@ export function drawStep2Intro(ctx, canvas, step2, assets = {}) {
 }
 
 export function drawStep2Gameplay(ctx, canvas, step2, assets = {}) {
+  if (String(step2?.mode || "") === "laksa-saute") {
+    const phase = String(step2?.phase || "addOilPaste");
+    const comboSeq = Array.isArray(step2?.comboSeq) ? step2.comboSeq : [];
+    const comboIndex = Math.max(0, Number(step2?.comboIndex || 0));
+
+    const emptyPan = assets?.step2_eurasian_fry_pan || assets?.step2_pot;
+    const oilBottle = assets?.step2_chinese_oil;
+    const spoonPaste = assets?.laksa_step2_spoon_paste || assets?.scoop_stage_3 || assets?.scoop_spoon_full;
+    const panOilPaste = assets?.laksa_step2_oilpaste_pan || assets?.step2_pot_paste || emptyPan;
+    const finishedPan = assets?.laksa_step2_finished_pan || assets?.step2_pot_finished || panOilPaste;
+
+    const instructionX = canvas.width / 2;
+    const instructionY = canvas.height - 172;
+
+    const phaseText = {
+      addOilPaste: "Complete the simple combo to add oil and chili paste",
+      addOilPasteAnim: "Adding oil and paste...",
+      cook: "Press Q/W/E/R on beat to keep the pointer in the glow zone",
+      finishAnim: "Finishing sauté"
+    }[phase] || "Sauté the chili paste";
+
+    const hintText = phase === "cook"
+      ? "Keep tapping to stabilize pointer in the green middle zone"
+      : "Button: Add oil and paste";
+
+    ctx.save();
+    ctx.textAlign = "center";
+    ctx.textBaseline = "middle";
+
+    ctx.fillStyle = "rgba(0,0,0,0.52)";
+    ctx.fillRect(instructionX - 330, instructionY - 52, 660, 108);
+    ctx.strokeStyle = "rgba(255,255,255,0.2)";
+    ctx.strokeRect(instructionX - 330, instructionY - 52, 660, 108);
+
+    ctx.fillStyle = "#ffe066";
+    ctx.font = "bold 30px Courier New";
+    ctx.fillText("Step 2: Sauté the Chili Paste Until Fragrant", instructionX, instructionY - 20);
+
+    ctx.fillStyle = "#d7d7d7";
+    ctx.font = "19px Courier New";
+    ctx.fillText(phaseText, instructionX, instructionY + 10);
+
+    ctx.fillStyle = "#a7c7ff";
+    ctx.font = "15px Courier New";
+    ctx.fillText(hintText, instructionX, instructionY + 36);
+
+    const panCx = canvas.width / 2;
+    const panCy = canvas.height / 2 + 12;
+    const panW = 700;
+    const panH = 350;
+    const panX = panCx - panW / 2;
+    const panY = panCy - panH / 2;
+
+    const showFinished = phase === "finishAnim";
+    const showOilPaste = phase === "cook" || showFinished;
+    const panSprite = showFinished
+      ? finishedPan
+      : showOilPaste
+      ? panOilPaste
+      : emptyPan;
+
+    ctx.fillStyle = "rgba(0,0,0,0.35)";
+    ctx.beginPath();
+    ctx.ellipse(panCx, panCy + panH * 0.43, panW * 0.38, 26, 0, 0, Math.PI * 2);
+    ctx.fill();
+
+    if (panSprite) {
+      drawImageContain(ctx, panSprite, panX, panY, panW, panH);
+    }
+
+    if (phase === "addOilPasteAnim") {
+      const progress = 1 - Math.max(0, Math.min(1, Number(step2?.transitionT || 0) / 0.9));
+
+      if (oilBottle) {
+        const ox = panX - 140 + progress * (panW * 0.42);
+        const oy = panY - 58 + progress * 148;
+        ctx.save();
+        ctx.translate(ox, oy);
+        ctx.rotate(-0.48 + progress * 0.34);
+        ctx.drawImage(oilBottle, -84, -108, 168, 216);
+        ctx.restore();
+      }
+
+      if (spoonPaste) {
+        const px = panX + panW + 24 - progress * (panW * 0.52);
+        const py = panY - 34 + progress * 138;
+        ctx.save();
+        ctx.translate(px, py);
+        ctx.rotate(-0.35 + progress * 0.34);
+        ctx.drawImage(spoonPaste, -126, -88, 252, 176);
+        ctx.restore();
+      }
+    }
+
+    if (phase === "addOilPaste" && comboSeq.length) {
+      const labels = { KeyQ: "Q", KeyW: "W", KeyE: "E", KeyR: "R" };
+      const size = 64;
+      const gap = 12;
+      const shown = comboSeq.slice(0, Math.min(4, comboSeq.length));
+      const totalW = shown.length * size + Math.max(0, shown.length - 1) * gap;
+      const panelPad = 12;
+      const panelW = totalW + panelPad * 2;
+      const panelH = size + 24;
+      const panelX = canvas.width / 2 - panelW / 2;
+      const panelY = 176;
+      const sy = panelY + 12;
+      let sx = panelX + panelPad;
+
+      ctx.fillStyle = "rgba(30,30,30,0.52)";
+      ctx.fillRect(panelX, panelY, panelW, panelH);
+      ctx.strokeStyle = "rgba(255,255,255,0.24)";
+      ctx.strokeRect(panelX, panelY, panelW, panelH);
+
+      for (let i = 0; i < shown.length; i++) {
+        const key = labels[shown[i]] || "?";
+        const isDone = i < comboIndex;
+        ctx.fillStyle = "rgba(255,255,255,0.08)";
+        ctx.fillRect(sx - 4, sy - 4, size + 8, size + 8);
+        ctx.strokeStyle = "rgba(255,255,255,0.18)";
+        ctx.strokeRect(sx - 4, sy - 4, size + 8, size + 8);
+        if (isDone) {
+          ctx.fillStyle = "rgba(128,255,114,0.16)";
+          ctx.fillRect(sx - 4, sy - 4, size + 8, size + 8);
+        }
+        drawButtonIcon(ctx, assets, key, sx, sy, size, { glow: isDone });
+        sx += size + gap;
+      }
+    }
+
+    if (phase === "cook" || phase === "finishAnim") {
+      const pointer = Math.max(0, Math.min(1, Number(step2?.heatPointer || 0.5)));
+      const sweetMin = Math.max(0, Math.min(1, Number(step2?.heatSweetMin ?? 0.44)));
+      const sweetMax = Math.max(0, Math.min(1, Number(step2?.heatSweetMax ?? 0.56)));
+      const aroma = Math.max(0, Math.min(1, Number(step2?.aromaMeter || 0.5)));
+      const timerLeft = Math.max(0, Number(step2?.heatTimer || 0));
+      const timerDur = Math.max(0.1, Number(step2?.heatDuration || 7));
+      const timerP = Math.max(0, Math.min(1, timerLeft / timerDur));
+
+      const heatW = 450;
+      const heatH = 20;
+      const heatX = canvas.width / 2 - heatW / 2;
+      const heatY = panY - 20;
+      ctx.fillStyle = "rgba(255,255,255,0.14)";
+      ctx.fillRect(heatX, heatY, heatW, heatH);
+      ctx.save();
+      ctx.shadowColor = "rgba(128,255,114,0.95)";
+      ctx.shadowBlur = 16;
+      ctx.fillStyle = "rgba(128,255,114,0.86)";
+      ctx.fillRect(heatX + heatW * sweetMin, heatY, heatW * (sweetMax - sweetMin), heatH);
+      ctx.restore();
+      ctx.strokeStyle = "rgba(255,255,255,0.45)";
+      ctx.strokeRect(heatX, heatY, heatW, heatH);
+
+      const px = heatX + heatW * pointer;
+      ctx.fillStyle = "rgba(255,224,102,0.96)";
+      ctx.fillRect(px - 4, heatY - 7, 8, heatH + 14);
+
+      const timerW = 320;
+      const timerH = 14;
+      const timerX = canvas.width / 2 - timerW / 2;
+      const timerY = heatY - 24;
+      ctx.fillStyle = "rgba(255,255,255,0.14)";
+      ctx.fillRect(timerX, timerY, timerW, timerH);
+      ctx.fillStyle = "rgba(167,199,255,0.94)";
+      ctx.fillRect(timerX, timerY, timerW * timerP, timerH);
+      ctx.strokeStyle = "rgba(255,255,255,0.42)";
+      ctx.strokeRect(timerX, timerY, timerW, timerH);
+
+      const aromaW = 300;
+      const aromaH = 14;
+      const aromaX = canvas.width / 2 - aromaW / 2;
+      const aromaY = heatY + 34;
+      ctx.fillStyle = "rgba(255,255,255,0.14)";
+      ctx.fillRect(aromaX, aromaY, aromaW, aromaH);
+      ctx.fillStyle = "rgba(255, 175, 90, 0.92)";
+      ctx.fillRect(aromaX, aromaY, aromaW * aroma, aromaH);
+      ctx.strokeStyle = "rgba(255,255,255,0.4)";
+      ctx.strokeRect(aromaX, aromaY, aromaW, aromaH);
+
+      ctx.fillStyle = "#a7c7ff";
+      ctx.font = "16px Courier New";
+      ctx.fillText(`Cook: ${timerLeft.toFixed(1)}s`, canvas.width / 2, timerY - 12);
+      ctx.fillText(`Aroma: ${Math.round(aroma * 100)}%`, canvas.width / 2, aromaY + 28);
+    }
+
+    if (phase === "finishAnim") {
+      const outcome = String(step2?.outcome || "");
+      const outcomeLabel = outcome === "fragrant" ? "Fragrant!" : "Sauté Done";
+      const outcomeColor = outcome === "fragrant"
+        ? "rgba(128,255,114,0.95)"
+        : "rgba(255, 224, 102, 0.95)";
+
+      ctx.fillStyle = outcomeColor;
+      ctx.font = "bold 30px Courier New";
+      ctx.fillText(outcomeLabel, canvas.width / 2, panY + panH + 32);
+    }
+
+    ctx.restore();
+    return;
+  }
+
   if (String(step2?.mode || "") === "lor-braise") {
     const isCurryFeng = String(step2?.dishName || "") === "CURRY FENG";
     const isCurryStep3Braise = isCurryFeng && String(step2?.braiseVariant || "") === "chili-pork";
@@ -1784,6 +2045,40 @@ export function drawStep2Gameplay(ctx, canvas, step2, assets = {}) {
 
 export function drawStep3Intro(ctx, canvas, step3Intro, assets = {}) {
   const t = Number(step3Intro?.timer || 0);
+  if (String(step3Intro?.mode || "") === "laksa-broth") {
+    const brothOil = assets?.laksa_step3_broth_oil || assets?.step2_pot;
+
+    ctx.save();
+    ctx.fillStyle = "rgba(0,0,0,0.74)";
+    ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+    const panelW = Math.min(960, canvas.width - 120);
+    const panelH = 280;
+    const panelX = (canvas.width - panelW) / 2;
+    const panelY = canvas.height / 2 - panelH / 2;
+    drawPanel(ctx, panelX, panelY, panelW, panelH, 0.74);
+
+    ctx.textAlign = "center";
+    ctx.textBaseline = "middle";
+    ctx.fillStyle = "#ffe066";
+    ctx.font = "bold 38px Courier New";
+    ctx.fillText("Step 3: Build the Coconut Broth and Cook the Shrimp.", canvas.width / 2, panelY + 62);
+
+    ctx.fillStyle = "#d7d7d7";
+    ctx.font = "19px Courier New";
+    ctx.fillText("Broth with oil is ready. Pour coconut milk, simmer, then add shrimp.", canvas.width / 2, panelY + 104);
+
+    if (brothOil) {
+      drawImageContain(ctx, brothOil, canvas.width / 2 - 260, panelY + 122, 520, 250);
+    }
+
+    ctx.fillStyle = "#a7c7ff";
+    ctx.font = "16px Courier New";
+    ctx.fillText(`Starting in ${Math.max(0, Math.ceil(t))}...`, canvas.width / 2, panelY + 246);
+    ctx.restore();
+    return;
+  }
+
   const usesLorStyleFlow = ["LOR KAI YIK", "CURRY FENG"].includes(String(step3Intro?.dishName || ""));
 
   ctx.save();
@@ -1845,6 +2140,185 @@ export function drawStep3Intro(ctx, canvas, step3Intro, assets = {}) {
 
 export function drawStep3Gameplay(ctx, canvas, game, assets = {}, yTop = 140, bottomUiTop = null) {
   const s3 = game.step3 || {};
+  if (String(s3?.mode || "") === "laksa-broth") {
+    const phase = String(s3?.phase || "pourCoconut");
+    const brothOil = assets?.laksa_step3_broth_oil || assets?.step2_pot;
+    const brothCoconut = assets?.laksa_step3_broth_coconut || brothOil;
+    const brothFinished = assets?.laksa_step3_broth_finished || brothCoconut;
+    const coconut = assets?.coconut;
+    const shrimp = assets?.shrimp;
+
+    const phaseText = {
+      pourCoconut: "Hold GREEN button to pour coconut milk to the mark",
+      coconutAnim: "Coconut milk pouring into broth...",
+      simmer: "Gentle simmer...",
+      addShrimp: "Complete sequence to add shrimp",
+      addShrimpAnim: "Shrimp dropping into broth...",
+      finish: "Broth finished"
+    }[phase] || "Build broth";
+
+    const comboSeq = Array.isArray(s3?.comboSeq) ? s3.comboSeq : [];
+    const comboIndex = Math.max(0, Number(s3?.comboIndex || 0));
+
+    const headerY = Math.max(96, yTop + 52);
+    const safeBottom = Number.isFinite(bottomUiTop) ? bottomUiTop : (canvas.height - 112);
+    const potW = 700;
+    const potH = 360;
+    const potX = canvas.width / 2 - potW / 2;
+    const potY = Math.max(headerY + 120, safeBottom - potH - 50);
+
+    ctx.save();
+    ctx.textAlign = "center";
+    ctx.textBaseline = "middle";
+
+    ctx.fillStyle = "rgba(0,0,0,0.52)";
+    ctx.fillRect(canvas.width / 2 - 390, headerY - 40, 780, 100);
+    ctx.strokeStyle = "rgba(255,255,255,0.2)";
+    ctx.strokeRect(canvas.width / 2 - 390, headerY - 40, 780, 100);
+    ctx.fillStyle = "#ffe066";
+    ctx.font = "bold 30px Courier New";
+    ctx.fillText("Step 3: Build the Coconut Broth and Cook the Shrimp", canvas.width / 2, headerY - 10);
+    ctx.fillStyle = "#a7c7ff";
+    ctx.font = "15px Courier New";
+    ctx.fillText(phaseText, canvas.width / 2, headerY + 16);
+
+    const showFinished = phase === "finish";
+    const showCoconutBroth = phase === "simmer" || phase === "addShrimp" || phase === "addShrimpAnim" || showFinished;
+    const brothSprite = showFinished
+      ? brothFinished
+      : showCoconutBroth
+      ? brothCoconut
+      : brothOil;
+
+    if (brothSprite) {
+      ctx.fillStyle = "rgba(0,0,0,0.35)";
+      ctx.beginPath();
+      ctx.ellipse(potX + potW * 0.5, potY + potH * 0.93, potW * 0.38, 24, 0, 0, Math.PI * 2);
+      ctx.fill();
+      drawImageContain(ctx, brothSprite, potX, potY, potW, potH);
+    }
+
+    if (phase === "coconutAnim" && coconut) {
+      const progress = 1 - Math.max(0, Math.min(1, Number(s3?.transitionT || 0) / 0.9));
+      const cx = potX - 120 + progress * (potW * 0.42);
+      const cy = potY - 44 + progress * 148;
+      ctx.save();
+      ctx.translate(cx, cy);
+      ctx.rotate(-0.38 + progress * 0.35);
+      ctx.drawImage(coconut, -94, -72, 188, 144);
+      ctx.restore();
+    }
+
+    if (phase === "addShrimpAnim" && shrimp) {
+      const progress = 1 - Math.max(0, Math.min(1, Number(s3?.transitionT || 0) / 0.95));
+      const sx = potX + potW + 10 - progress * (potW * 0.54);
+      const sy = potY - 20 + progress * 132;
+      ctx.save();
+      ctx.translate(sx, sy);
+      ctx.rotate(-0.24 + progress * 0.26);
+      ctx.drawImage(shrimp, -98, -70, 196, 140);
+      ctx.restore();
+    }
+
+    if (phase === "simmer") {
+      const t = Number(s3?.animT || 0);
+      for (let i = 0; i < 10; i++) {
+        const bx = potX + 90 + ((i * 68 + t * 78) % (potW - 180));
+        const by = potY + 220 - ((t * 32 + i * 12) % 56);
+        const r = 2.4 + Math.sin(t * 5 + i * 0.8) * 0.9;
+        ctx.fillStyle = "rgba(230, 240, 255, 0.72)";
+        ctx.beginPath();
+        ctx.arc(bx, by, Math.max(1.4, r), 0, Math.PI * 2);
+        ctx.fill();
+      }
+
+      const dur = Math.max(0.1, Number(s3?.simmerDuration || 2.2));
+      const left = Math.max(0, Number(s3?.simmerTimer || 0));
+      const ratio = Math.max(0, Math.min(1, left / dur));
+      const timerW = 320;
+      const timerH = 14;
+      const tx = canvas.width / 2 - timerW / 2;
+      const ty = potY - 18;
+      ctx.fillStyle = "rgba(255,255,255,0.14)";
+      ctx.fillRect(tx, ty, timerW, timerH);
+      ctx.fillStyle = "rgba(167,199,255,0.94)";
+      ctx.fillRect(tx, ty, timerW * ratio, timerH);
+      ctx.strokeStyle = "rgba(255,255,255,0.42)";
+      ctx.strokeRect(tx, ty, timerW, timerH);
+      ctx.fillStyle = "#a7c7ff";
+      ctx.font = "16px Courier New";
+      ctx.fillText(`Simmer: ${left.toFixed(1)}s`, canvas.width / 2, ty - 12);
+    }
+
+    if (phase === "pourCoconut" || phase === "coconutAnim") {
+      const fill = Math.max(0, Math.min(1, Number(s3?.coconutFill || 0)));
+      const mark = Math.max(0, Math.min(1, Number(s3?.coconutTarget || 0.72)));
+      const overflow = Math.max(mark + 0.05, Math.min(1, Number(s3?.coconutOverflow || 0.9)));
+      const barW = 420;
+      const barH = 20;
+      const bx = canvas.width / 2 - barW / 2;
+      const by = Math.max(headerY + 210, safeBottom - 48);
+
+      ctx.fillStyle = "rgba(255,255,255,0.16)";
+      ctx.fillRect(bx, by, barW, barH);
+      ctx.fillStyle = "rgba(128,255,114,0.32)";
+      ctx.fillRect(bx + barW * (mark - 0.05), by, barW * 0.1, barH);
+      ctx.fillStyle = "rgba(255, 89, 94, 0.28)";
+      ctx.fillRect(bx + barW * overflow, by, barW * (1 - overflow), barH);
+      ctx.fillStyle = "rgba(255,255,255,0.88)";
+      ctx.fillRect(bx, by, barW * fill, barH);
+      ctx.strokeStyle = "rgba(255,255,255,0.4)";
+      ctx.strokeRect(bx, by, barW, barH);
+      ctx.fillStyle = "#a7c7ff";
+      ctx.font = "15px Courier New";
+      ctx.fillText("Hold W (green) and stop at the green mark", canvas.width / 2, by - 14);
+    }
+
+    if (phase === "addShrimp" && comboSeq.length) {
+      const labels = { KeyQ: "Q", KeyW: "W", KeyE: "E", KeyR: "R" };
+      const size = 66;
+      const gap = 12;
+      const shown = comboSeq.slice(0, Math.min(6, comboSeq.length));
+      const totalW = shown.length * size + Math.max(0, shown.length - 1) * gap;
+      const panelPad = 12;
+      const panelW = totalW + panelPad * 2;
+      const panelH = size + 26;
+      const panelX = canvas.width / 2 - panelW / 2;
+      const panelY = headerY + 74;
+      const sy = panelY + 13;
+      let sx = panelX + panelPad;
+
+      ctx.fillStyle = "rgba(30,30,30,0.52)";
+      ctx.fillRect(panelX, panelY, panelW, panelH);
+      ctx.strokeStyle = "rgba(255,255,255,0.24)";
+      ctx.strokeRect(panelX, panelY, panelW, panelH);
+
+      for (let i = 0; i < shown.length; i++) {
+        const key = labels[shown[i]] || "?";
+        const isDone = i < comboIndex;
+        ctx.fillStyle = "rgba(255,255,255,0.08)";
+        ctx.fillRect(sx - 4, sy - 4, size + 8, size + 8);
+        ctx.strokeStyle = "rgba(255,255,255,0.18)";
+        ctx.strokeRect(sx - 4, sy - 4, size + 8, size + 8);
+        if (isDone) {
+          ctx.fillStyle = "rgba(128,255,114,0.16)";
+          ctx.fillRect(sx - 4, sy - 4, size + 8, size + 8);
+        }
+        drawButtonIcon(ctx, assets, key, sx, sy, size, { glow: isDone });
+        sx += size + gap;
+      }
+    }
+
+    if (phase === "finish") {
+      ctx.fillStyle = "rgba(128,255,114,0.95)";
+      ctx.font = "bold 28px Courier New";
+      ctx.fillText("BROTH & SHRIMP READY!", canvas.width / 2, canvas.height - 96);
+    }
+
+    ctx.restore();
+    return;
+  }
+
   const usesLorStyleFlow = ["LOR KAI YIK", "CURRY FENG"].includes(String(game?.currentDish?.name || ""));
 
   const pot = usesLorStyleFlow
@@ -1969,6 +2443,36 @@ export function drawStep3Gameplay(ctx, canvas, game, assets = {}, yTop = 140, bo
 export function drawStep4Intro(ctx, canvas, step4Intro, assets = {}) {
   const t = Number(step4Intro?.timer || 0);
   const dishName = String(step4Intro?.dishName || "");
+  if (String(step4Intro?.mode || "") === "laksa-serve") {
+    const bowlNoodles = assets?.laksa_step4_bowl_noodles || assets?.laksa_step4_bowl_rice || assets?.step4_serve;
+
+    ctx.save();
+    ctx.fillStyle = "rgba(0,0,0,0.74)";
+    ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+    const panelW = Math.min(960, canvas.width - 120);
+    const panelH = 260;
+    const panelX = (canvas.width - panelW) / 2;
+    const panelY = canvas.height / 2 - panelH / 2;
+    drawPanel(ctx, panelX, panelY, panelW, panelH, 0.74);
+
+    ctx.textAlign = "center";
+    ctx.textBaseline = "middle";
+    ctx.fillStyle = "#ffe066";
+    ctx.font = "bold 40px Courier New";
+    ctx.fillText("Step 4: Serve Laksa with Rice.", canvas.width / 2, panelY + 82);
+
+    if (bowlNoodles) {
+      drawImageContain(ctx, bowlNoodles, canvas.width / 2 - 250, panelY + 100, 500, 250);
+    }
+
+    ctx.fillStyle = "#a7c7ff";
+    ctx.font = "16px Courier New";
+    ctx.fillText(`Starting in ${Math.max(0, Math.ceil(t))}...`, canvas.width / 2, panelY + 210);
+    ctx.restore();
+    return;
+  }
+
   const usesLorStyleFlow = ["LOR KAI YIK", "CURRY FENG"].includes(dishName);
   const dishNameTitle = dishName || "Your Dish";
 
@@ -2012,6 +2516,174 @@ export function drawStep4Intro(ctx, canvas, step4Intro, assets = {}) {
 
 export function drawStep4Gameplay(ctx, canvas, game, assets = {}, yTop = 140, bottomUiTop = null) {
   const s4 = game.step4 || {};
+  if (String(s4?.mode || "") === "laksa-serve") {
+    const phase = String(s4?.phase || "addRice");
+    const comboSeq = Array.isArray(s4?.comboSeq) ? s4.comboSeq : [];
+    const comboIndex = Math.max(0, Number(s4?.comboIndex || 0));
+    const dishSlug = slugifyDishName(game?.currentDish?.name || "");
+
+    const bowlNoodles = assets?.laksa_step4_bowl_noodles || assets?.laksa_step4_bowl_rice;
+    const bowlRice = assets?.laksa_step4_bowl_rice || bowlNoodles;
+    const brothFinished = assets?.laksa_step3_broth_finished || assets?.laksa_step3_broth_coconut;
+    const rice = assets?.rice;
+    const spoon = assets?.scoop_spoon_empty || assets?.scoop_spoon_stir;
+    const finalDish = assets?.[`dish_${dishSlug}`] || assets?.step4_serve;
+
+    const headerY = Math.max(96, yTop + 52);
+    const bowlW = 520;
+    const bowlH = 330;
+    const bowlX = canvas.width / 2 - bowlW / 2;
+    const bowlY = canvas.height / 2 - bowlH / 2 + 34;
+
+    const brothW = 280;
+    const brothH = 180;
+    const brothX = canvas.width - brothW - 64;
+    const brothY = 156;
+
+    const phaseText = {
+      addRice: "Complete sequence to add rice",
+      addRiceAnim: "Rice going into noodles...",
+      scoopTap: "Tap any button to scoop broth",
+      scoopToBrothAnim: "Scoop going to broth",
+      scoopToBowlAnim: "Scoop returning to bowl",
+      final: "Laksa served"
+    }[phase] || "Serve laksa";
+
+    ctx.save();
+    ctx.textAlign = "center";
+    ctx.textBaseline = "middle";
+
+    ctx.fillStyle = "rgba(0,0,0,0.52)";
+    ctx.fillRect(canvas.width / 2 - 390, headerY - 42, 780, 106);
+    ctx.strokeStyle = "rgba(255,255,255,0.2)";
+    ctx.strokeRect(canvas.width / 2 - 390, headerY - 42, 780, 106);
+    ctx.fillStyle = "#ffe066";
+    ctx.font = "bold 30px Courier New";
+    ctx.fillText("Step 4: Serve Laksa with Rice", canvas.width / 2, headerY - 12);
+    ctx.fillStyle = "#a7c7ff";
+    ctx.font = "15px Courier New";
+    ctx.fillText(phaseText, canvas.width / 2, headerY + 18);
+
+    const showRiceBowl = phase !== "addRice" && phase !== "addRiceAnim";
+    const bowlSprite = showRiceBowl ? bowlRice : bowlNoodles;
+    if (bowlSprite) {
+      ctx.fillStyle = "rgba(0,0,0,0.35)";
+      ctx.beginPath();
+      ctx.ellipse(canvas.width / 2, bowlY + bowlH * 0.9, bowlW * 0.34, 22, 0, 0, Math.PI * 2);
+      ctx.fill();
+      drawImageContain(ctx, bowlSprite, bowlX, bowlY, bowlW, bowlH);
+    }
+
+    if (phase === "addRiceAnim" && rice) {
+      const p = Math.max(0, Math.min(1, Number(s4?.phaseT || 0) / 0.85));
+      const rx = bowlX - 120 + p * (bowlW * 0.45);
+      const ry = bowlY - 32 + p * 132;
+      ctx.save();
+      ctx.translate(rx, ry);
+      ctx.rotate(-0.3 + p * 0.24);
+      ctx.drawImage(rice, -94, -68, 188, 136);
+      ctx.restore();
+    }
+
+    if (phase === "scoopTap" || phase === "scoopToBrothAnim" || phase === "scoopToBowlAnim") {
+      if (brothFinished) {
+        drawImageContain(ctx, brothFinished, brothX, brothY, brothW, brothH);
+      }
+    }
+
+    if (spoon && (phase === "scoopToBrothAnim" || phase === "scoopToBowlAnim")) {
+      let sx = bowlX + bowlW * 0.5;
+      let sy = bowlY + bowlH * 0.38;
+      let rot = -0.55;
+
+      if (phase === "scoopToBrothAnim") {
+        const p = Math.max(0, Math.min(1, Number(s4?.phaseT || 0) / 0.65));
+        sx = (bowlX + bowlW * 0.52) + (brothX + brothW * 0.34 - (bowlX + bowlW * 0.52)) * p;
+        sy = (bowlY + bowlH * 0.38) + (brothY + brothH * 0.5 - (bowlY + bowlH * 0.38)) * p;
+        rot = -0.55 + p * 0.5;
+      } else {
+        const p = Math.max(0, Math.min(1, Number(s4?.phaseT || 0) / 0.85));
+        sx = (brothX + brothW * 0.34) + (bowlX + bowlW * 0.5 - (brothX + brothW * 0.34)) * p;
+        sy = (brothY + brothH * 0.5) + (bowlY + bowlH * 0.36 - (brothY + brothH * 0.5)) * p;
+        rot = -0.08 - p * 0.45;
+      }
+
+      ctx.save();
+      ctx.translate(sx, sy);
+      ctx.rotate(rot);
+      ctx.drawImage(spoon, -108, -74, 216, 148);
+      ctx.restore();
+    }
+
+    if (phase === "addRice" && comboSeq.length) {
+      const labels = { KeyQ: "Q", KeyW: "W", KeyE: "E", KeyR: "R" };
+      const size = 68;
+      const gap = 12;
+      const shown = comboSeq.slice(0, Math.min(6, comboSeq.length));
+      const totalW = shown.length * size + Math.max(0, shown.length - 1) * gap;
+      const panelPad = 12;
+      const panelW = totalW + panelPad * 2;
+      const panelH = size + 28;
+      const panelX = canvas.width / 2 - panelW / 2;
+      const panelY = headerY + 74;
+      let sx = panelX + panelPad;
+      const sy = panelY + 14;
+
+      ctx.fillStyle = "rgba(30,30,30,0.52)";
+      ctx.fillRect(panelX, panelY, panelW, panelH);
+      ctx.strokeStyle = "rgba(255,255,255,0.24)";
+      ctx.strokeRect(panelX, panelY, panelW, panelH);
+
+      for (let i = 0; i < shown.length; i++) {
+        const key = labels[shown[i]] || "?";
+        const isDone = i < comboIndex;
+        ctx.fillStyle = "rgba(255,255,255,0.08)";
+        ctx.fillRect(sx - 4, sy - 4, size + 8, size + 8);
+        ctx.strokeStyle = "rgba(255,255,255,0.18)";
+        ctx.strokeRect(sx - 4, sy - 4, size + 8, size + 8);
+        if (isDone) {
+          ctx.fillStyle = "rgba(128,255,114,0.16)";
+          ctx.fillRect(sx - 4, sy - 4, size + 8, size + 8);
+        }
+        drawButtonIcon(ctx, assets, key, sx, sy, size, { glow: isDone });
+        sx += size + gap;
+      }
+
+      const duration = Math.max(0.1, Number(s4?.duration || 6));
+      const left = Math.max(0, Number(s4?.timeLeft || 0));
+      const ratio = Math.max(0, Math.min(1, left / duration));
+      const timerW = 360;
+      const timerH = 16;
+      const timerX = canvas.width / 2 - timerW / 2;
+      const safeBottom = Number.isFinite(bottomUiTop) ? bottomUiTop : (canvas.height - 112);
+      const timerY = Math.max(headerY + 210, safeBottom - 48);
+      ctx.fillStyle = "rgba(255,255,255,0.16)";
+      ctx.fillRect(timerX, timerY, timerW, timerH);
+      ctx.fillStyle = ratio > 0.35 ? "rgba(128,255,114,0.88)" : "rgba(255, 89, 94, 0.9)";
+      ctx.fillRect(timerX, timerY, timerW * ratio, timerH);
+      ctx.strokeStyle = "rgba(255,255,255,0.35)";
+      ctx.strokeRect(timerX, timerY, timerW, timerH);
+      ctx.fillStyle = "#a7c7ff";
+      ctx.font = "16px Courier New";
+      ctx.fillText(`Time Left: ${left.toFixed(1)}s`, canvas.width / 2, timerY - 14);
+    }
+
+    if (phase === "final") {
+      if (finalDish) {
+        drawImageContain(ctx, finalDish, canvas.width / 2 - 280, canvas.height / 2 - 140, 560, 390);
+      }
+      ctx.fillStyle = "rgba(128,255,114,0.95)";
+      ctx.font = "bold 26px Courier New";
+      ctx.fillText("FINAL DISH READY!", canvas.width / 2, canvas.height - 102);
+      ctx.fillStyle = "#a7c7ff";
+      ctx.font = "18px Courier New";
+      ctx.fillText(`Score: ${game.score}`, canvas.width / 2, canvas.height - 74);
+    }
+
+    ctx.restore();
+    return;
+  }
+
   const dishName = String(game?.currentDish?.name || "");
   const usesLorStyleFlow = ["LOR KAI YIK", "CURRY FENG"].includes(dishName);
   const isCurryFeng = dishName === "CURRY FENG";
