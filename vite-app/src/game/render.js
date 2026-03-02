@@ -1272,7 +1272,7 @@ export function drawStep2Intro(ctx, canvas, step2, assets = {}) {
 
     ctx.fillStyle = "#d7d7d7";
     ctx.font = "20px Courier New";
-    ctx.fillText("Pan with oil. Keep heat pointer in the glowing sweet spot.", canvas.width / 2, panelY + 102);
+    ctx.fillText("Spam buttons to keep the slider in the green area.", canvas.width / 2, panelY + 102);
 
     const heatW = 420;
     const heatH = 18;
@@ -1392,12 +1392,12 @@ export function drawStep2Gameplay(ctx, canvas, step2, assets = {}) {
     const phaseText = {
       addOilPaste: "Complete the simple combo to add oil and chili paste",
       addOilPasteAnim: "Adding oil and paste...",
-      cook: "Press Q/W/E/R on beat to keep the pointer in the glow zone",
+      cook: "Spam buttons to keep the slider in the green area",
       finishAnim: "Finishing sauté"
     }[phase] || "Sauté the chili paste";
 
     const hintText = phase === "cook"
-      ? "Keep tapping to stabilize pointer in the green middle zone"
+      ? "Spam buttons to keep the slider in the green area"
       : "Button: Add oil and paste";
 
     ctx.save();
@@ -1596,7 +1596,7 @@ export function drawStep2Gameplay(ctx, canvas, step2, assets = {}) {
         : "Adding oil & clove...",
       addChicken: `Complete sequence to add ${add2Label} pieces`,
       addChickenAnim: `Adding ${add2Label} pieces...`,
-      heat: "Tap in rhythm to keep ideal braise heat"
+      heat: "spam button to keep in green area"
     }[step2?.phase] || "Start the braise";
 
     const hintText = {
@@ -2321,19 +2321,22 @@ export function drawStep3Gameplay(ctx, canvas, game, assets = {}, yTop = 140, bo
   ctx.save();
   ctx.textAlign = "center";
   ctx.textBaseline = "middle";
+  const showGuidanceUi = !s3.finishAnim;
 
   const headerY = 148;
-  ctx.fillStyle = "rgba(0,0,0,0.52)";
-  ctx.fillRect(canvas.width / 2 - 360, headerY - 40, 720, 100);
-  ctx.strokeStyle = "rgba(255,255,255,0.2)";
-  ctx.strokeRect(canvas.width / 2 - 360, headerY - 40, 720, 100);
+  if (showGuidanceUi) {
+    ctx.fillStyle = "rgba(0,0,0,0.52)";
+    ctx.fillRect(canvas.width / 2 - 360, headerY - 40, 720, 100);
+    ctx.strokeStyle = "rgba(255,255,255,0.2)";
+    ctx.strokeRect(canvas.width / 2 - 360, headerY - 40, 720, 100);
 
-  ctx.fillStyle = "#ffe066";
-  ctx.font = "bold 30px Courier New";
-  ctx.fillText("Step 3: Stir Carefully", canvas.width / 2, headerY - 10);
-  ctx.fillStyle = "#a7c7ff";
-  ctx.font = "15px Courier New";
-  ctx.fillText("Press the target button when pointer is in green zone", canvas.width / 2, headerY + 16);
+    ctx.fillStyle = "#ffe066";
+    ctx.font = "bold 30px Courier New";
+    ctx.fillText("Step 3: Stir Carefully", canvas.width / 2, headerY - 10);
+    ctx.fillStyle = "#a7c7ff";
+    ctx.font = "15px Courier New";
+    ctx.fillText("Press the target button when pointer is in green zone", canvas.width / 2, headerY + 16);
+  }
 
   const barW = 560;
   const barH = 20;
@@ -2344,39 +2347,41 @@ export function drawStep3Gameplay(ctx, canvas, game, assets = {}, yTop = 140, bo
   const sweetMax = Number(s3.sweetMax ?? 0.58);
   const pointer = Math.max(0, Math.min(1, Number(s3.pointer ?? 0.5)));
 
-  ctx.fillStyle = "rgba(255,255,255,0.16)";
-  ctx.fillRect(bx, by, barW, barH);
-  ctx.save();
-  ctx.shadowColor = "rgba(128,255,114,0.9)";
-  ctx.shadowBlur = 12;
-  ctx.fillStyle = "rgba(128,255,114,0.88)";
-  ctx.fillRect(bx + barW * sweetMin, by, barW * (sweetMax - sweetMin), barH);
-  ctx.restore();
-  ctx.strokeStyle = "rgba(255,255,255,0.35)";
-  ctx.strokeRect(bx, by, barW, barH);
+  if (showGuidanceUi) {
+    ctx.fillStyle = "rgba(255,255,255,0.16)";
+    ctx.fillRect(bx, by, barW, barH);
+    ctx.save();
+    ctx.shadowColor = "rgba(128,255,114,0.9)";
+    ctx.shadowBlur = 12;
+    ctx.fillStyle = "rgba(128,255,114,0.88)";
+    ctx.fillRect(bx + barW * sweetMin, by, barW * (sweetMax - sweetMin), barH);
+    ctx.restore();
+    ctx.strokeStyle = "rgba(255,255,255,0.35)";
+    ctx.strokeRect(bx, by, barW, barH);
 
-  const px = bx + barW * pointer;
-  ctx.fillStyle = "rgba(255,224,102,0.96)";
-  ctx.fillRect(px - 4, by - 7, 8, barH + 14);
+    const px = bx + barW * pointer;
+    ctx.fillStyle = "rgba(255,224,102,0.96)";
+    ctx.fillRect(px - 4, by - 7, 8, barH + 14);
 
-  const targetKey = CODE_TO_LABEL[s3.targetCode] || "?";
-  const targetSize = 72;
-  const targetPanelW = 180;
-  const targetPanelH = 120;
-  const targetPanelX = canvas.width / 2 - targetPanelW / 2;
-  const targetPanelY = headerY + 54;
-  ctx.fillStyle = "rgba(30,30,30,0.52)";
-  ctx.fillRect(targetPanelX, targetPanelY, targetPanelW, targetPanelH);
-  ctx.strokeStyle = "rgba(255,255,255,0.24)";
-  ctx.strokeRect(targetPanelX, targetPanelY, targetPanelW, targetPanelH);
-  ctx.fillStyle = "rgba(255,224,102,0.95)";
-  ctx.fillRect(targetPanelX + 46, targetPanelY + 8, 88, 14);
-  ctx.strokeStyle = "rgba(0,0,0,0.55)";
-  ctx.strokeRect(targetPanelX + 46, targetPanelY + 8, 88, 14);
-  ctx.fillStyle = "#111";
-  ctx.font = "bold 10px Courier New";
-  ctx.fillText("TARGET", canvas.width / 2, targetPanelY + 15);
-  drawButtonIcon(ctx, assets, targetKey, canvas.width / 2 - targetSize / 2, targetPanelY + 32, targetSize, { glow: true });
+    const targetKey = CODE_TO_LABEL[s3.targetCode] || "?";
+    const targetSize = 72;
+    const targetPanelW = 180;
+    const targetPanelH = 120;
+    const targetPanelX = canvas.width / 2 - targetPanelW / 2;
+    const targetPanelY = headerY + 54;
+    ctx.fillStyle = "rgba(30,30,30,0.52)";
+    ctx.fillRect(targetPanelX, targetPanelY, targetPanelW, targetPanelH);
+    ctx.strokeStyle = "rgba(255,255,255,0.24)";
+    ctx.strokeRect(targetPanelX, targetPanelY, targetPanelW, targetPanelH);
+    ctx.fillStyle = "rgba(255,224,102,0.95)";
+    ctx.fillRect(targetPanelX + 46, targetPanelY + 8, 88, 14);
+    ctx.strokeStyle = "rgba(0,0,0,0.55)";
+    ctx.strokeRect(targetPanelX + 46, targetPanelY + 8, 88, 14);
+    ctx.fillStyle = "#111";
+    ctx.font = "bold 10px Courier New";
+    ctx.fillText("TARGET", canvas.width / 2, targetPanelY + 15);
+    drawButtonIcon(ctx, assets, targetKey, canvas.width / 2 - targetSize / 2, targetPanelY + 32, targetSize, { glow: true });
+  }
 
   if (pot) {
     ctx.fillStyle = "rgba(0,0,0,0.35)";
@@ -2402,19 +2407,21 @@ export function drawStep3Gameplay(ctx, canvas, game, assets = {}, yTop = 140, bo
     ctx.restore();
   }
 
-  const infoW = 620;
-  const infoH = 46;
-  const infoX = canvas.width / 2 - infoW / 2;
-  const infoY = by - infoH - 14;
-  ctx.fillStyle = "rgba(0,0,0,0.48)";
-  ctx.fillRect(infoX, infoY, infoW, infoH);
-  ctx.strokeStyle = "rgba(255,255,255,0.22)";
-  ctx.strokeRect(infoX, infoY, infoW, infoH);
-  ctx.fillStyle = "#a7c7ff";
-  ctx.font = "16px Courier New";
-  const done = Math.max(0, Number(s3.hitsDone || 0));
-  const need = Math.max(1, Number(s3.hitsNeed || 3));
-  ctx.fillText(usesLorStyleFlow ? `Simmer Timing ${done}/${need}` : `Timed Hits ${done}/${need}`, canvas.width / 2, infoY + 30);
+  if (showGuidanceUi) {
+    const infoW = 620;
+    const infoH = 46;
+    const infoX = canvas.width / 2 - infoW / 2;
+    const infoY = by - infoH - 14;
+    ctx.fillStyle = "rgba(0,0,0,0.48)";
+    ctx.fillRect(infoX, infoY, infoW, infoH);
+    ctx.strokeStyle = "rgba(255,255,255,0.22)";
+    ctx.strokeRect(infoX, infoY, infoW, infoH);
+    ctx.fillStyle = "#a7c7ff";
+    ctx.font = "16px Courier New";
+    const done = Math.max(0, Number(s3.hitsDone || 0));
+    const need = Math.max(1, Number(s3.hitsNeed || 3));
+    ctx.fillText(usesLorStyleFlow ? "spam the button to keep the slider in the middle" : `Timed Hits ${done}/${need}`, canvas.width / 2, infoY + 30);
+  }
 
   if (s3.finishAnim) {
     ctx.fillStyle = "rgba(128,255,114,0.92)";
