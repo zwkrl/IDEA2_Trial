@@ -89,6 +89,14 @@ export function createGame({ canvas, startBtn, restartBtn, hud }) {
       loadImage("laksa_pestle", "/assets/process1_LAKSA_SIGLAP/seperate_pestle.png"),
       loadImage("laksa_mortar_empty", "/assets/process1_LAKSA_SIGLAP/empty_motar.png"),
       loadImage("laksa_mortar_full", "/assets/process1_LAKSA_SIGLAP/smashed_chilli_motar.png"),
+      loadImage("laksa_step2_spoon_paste", "/assets/process1_LAKSA_SIGLAP/spoon_paste.png"),
+      loadImage("laksa_step2_oilpaste_pan", "/assets/process1_LAKSA_SIGLAP/oilpaste_pan.png"),
+      loadImage("laksa_step2_finished_pan", "/assets/process1_LAKSA_SIGLAP/finished_pan.png"),
+      loadImage("laksa_step3_broth_oil", "/assets/process2_LAKSA_SIGLAP/broth_oil.png"),
+      loadImage("laksa_step3_broth_coconut", "/assets/process2_LAKSA_SIGLAP/brothwith_coconut.png"),
+      loadImage("laksa_step3_broth_finished", "/assets/process2_LAKSA_SIGLAP/broth_finished.png"),
+      loadImage("laksa_step4_bowl_noodles", "/assets/process2_LAKSA_SIGLAP/bowl_noodles_silhouette.png"),
+      loadImage("laksa_step4_bowl_rice", "/assets/process2_LAKSA_SIGLAP/noodles_sillhouette_withrice.png"),
       loadImage("btn_q", "/assets/ui/blue-btn.png"),
       loadImage("btn_w", "/assets/ui/green-btn.png"),
       loadImage("btn_e", "/assets/ui/yellow-btn.png"),
@@ -569,15 +577,23 @@ export function createGame({ canvas, startBtn, restartBtn, hud }) {
   }
 
   function shouldRunStep2Flow() {
-    return ["AYAM BUAH KELUAK", "LOR KAI YIK", "CURRY FENG"].includes(game.currentDish?.name) && game.stepIndex === 1;
+    return ["AYAM BUAH KELUAK", "LOR KAI YIK", "CURRY FENG", "LAKSA SIGLAP"].includes(game.currentDish?.name) && game.stepIndex === 1;
   }
 
   function shouldRunStep3IntroFlow() {
-    return ["AYAM BUAH KELUAK", "LOR KAI YIK"].includes(game.currentDish?.name) && game.stepIndex === 2;
+    const dishName = game.currentDish?.name;
+    return (
+      (["AYAM BUAH KELUAK", "LOR KAI YIK"].includes(dishName) && game.stepIndex === 2)
+      || (dishName === "LAKSA SIGLAP" && game.stepIndex === 2)
+    );
   }
 
   function shouldRunStep4IntroFlow() {
-    return ["AYAM BUAH KELUAK", "LOR KAI YIK", "CURRY FENG"].includes(game.currentDish?.name) && game.stepIndex === 3;
+    const dishName = game.currentDish?.name;
+    return (
+      (["AYAM BUAH KELUAK", "LOR KAI YIK", "CURRY FENG"].includes(dishName) && game.stepIndex === 3)
+      || (dishName === "LAKSA SIGLAP" && game.stepIndex === 9)
+    );
   }
 
   function shouldRunStep3GameplayFlow() {
@@ -590,7 +606,11 @@ export function createGame({ canvas, startBtn, restartBtn, hud }) {
   }
 
   function shouldRunStep4GameplayFlow() {
-    return ["AYAM BUAH KELUAK", "LOR KAI YIK", "CURRY FENG"].includes(game.currentDish?.name) && game.stepIndex === 3;
+    const dishName = game.currentDish?.name;
+    return (
+      (["AYAM BUAH KELUAK", "LOR KAI YIK", "CURRY FENG"].includes(dishName) && game.stepIndex === 3)
+      || (dishName === "LAKSA SIGLAP" && game.stepIndex === 9)
+    );
   }
 
   function updateStep1UiModel() {
@@ -1052,7 +1072,40 @@ export function createGame({ canvas, startBtn, restartBtn, hud }) {
   }
 
   function startStep2Flow(phaseTag = "step2") {
+    const isLaksaSauteFlow = game.currentDish?.name === "LAKSA SIGLAP";
     const isChineseBraiseFlow = ["LOR KAI YIK", "CURRY FENG"].includes(game.currentDish?.name);
+
+    if (isLaksaSauteFlow) {
+      const comboLen = 2;
+      const comboSeq = Array.from({ length: comboLen }, () => QWER_CODES[Math.floor(Math.random() * QWER_CODES.length)]);
+      game.step2 = {
+        ...game.step2,
+        active: true,
+        intro: true,
+        introTimer: 5,
+        animT: 0,
+        mode: "laksa-saute",
+        dishName: game.currentDish?.name || "",
+        phase: "addOilPaste",
+        comboSeq,
+        comboIndex: 0,
+        comboLen,
+        transitionT: 0,
+        heatTimer: 7,
+        heatDuration: 7,
+        heatPointer: 0.5,
+        heatSweetMin: 0.44,
+        heatSweetMax: 0.56,
+        beatInterval: 0.48,
+        lastTapAt: 0,
+        aromaMeter: 0.5,
+        outcome: "",
+        finishT: 0
+      };
+      game.dishCountdown = 0;
+      setAlert("STEP 2 INTRO", "rgba(255, 224, 102, 0.95)", 1.0);
+      return;
+    }
 
     if (isChineseBraiseFlow) {
       const comboLen = 4;
@@ -1129,6 +1182,82 @@ export function createGame({ canvas, startBtn, restartBtn, hud }) {
     if (!s.active) return;
 
     s.animT += dt;
+
+    if (s.mode === "laksa-saute") {
+      if (s.intro) {
+        s.introTimer = Math.max(0, s.introTimer - dt);
+        if (s.introTimer <= 0) {
+          s.intro = false;
+          setAlert("COMPLETE COMBO: ADD OIL + PASTE", "rgba(255, 224, 102, 0.95)", 0.85);
+        }
+        return;
+      }
+
+      if (s.phase === "addOilPasteAnim") {
+        s.transitionT = Math.max(0, Number(s.transitionT || 0) - dt);
+        if (s.transitionT <= 0) {
+          s.phase = "cook";
+          s.comboSeq = [];
+          s.comboIndex = 0;
+          s.heatTimer = Math.max(6, Math.min(8, Number(s.heatDuration || 7)));
+          s.heatPointer = 0.5;
+          s.aromaMeter = 0.5;
+          s.lastTapAt = 0;
+          setAlert("COOK ON BEAT: HOLD THE SWEET SPOT", "rgba(128, 255, 114, 0.92)", 0.9);
+        }
+        return;
+      }
+
+      if (s.phase === "cook") {
+        s.heatTimer = Math.max(0, Number(s.heatTimer || 0) - dt);
+
+        const min = Number(s.heatSweetMin ?? 0.44);
+        const max = Number(s.heatSweetMax ?? 0.56);
+        const center = (min + max) / 2;
+
+        const pointerNow = Number(s.heatPointer || 0.5);
+        const outward = pointerNow >= center ? 1 : -1;
+        const waveDrift = Math.sin(Number(s.animT || 0) * 3.2) * 0.06;
+        s.heatPointer = Math.max(0, Math.min(1, pointerNow + outward * dt * 0.07 + waveDrift * dt));
+
+        const pointer = Number(s.heatPointer || 0);
+        if (pointer < min) {
+          s.aromaMeter = Math.max(0, Math.min(1, Number(s.aromaMeter || 0) - dt * 0.08));
+        } else if (pointer > max) {
+          s.aromaMeter = Math.max(0, Math.min(1, Number(s.aromaMeter || 0) - dt * 0.08));
+        } else {
+          s.aromaMeter = Math.max(0, Math.min(1, Number(s.aromaMeter || 0) + dt * 0.1));
+        }
+
+        if (s.heatTimer <= 0) {
+          const aroma = Number(s.aromaMeter || 0);
+
+          if (aroma >= 0.55) {
+            s.outcome = "fragrant";
+            game.score += 180;
+            setAlert("FRAGRANT CHILI PASTE!", "rgba(128, 255, 114, 0.92)", 0.85);
+          } else {
+            s.outcome = "done";
+            game.score += 120;
+            setAlert("SAUTÉ COMPLETE", "rgba(255, 224, 102, 0.95)", 0.85);
+          }
+
+          updateHUD();
+          s.phase = "finishAnim";
+          s.finishT = 2.4;
+        }
+        return;
+      }
+
+      if (s.phase === "finishAnim") {
+        s.finishT = Math.max(0, Number(s.finishT || 0) - dt);
+        if (s.finishT <= 0) {
+          completeStep2Flow();
+        }
+      }
+
+      return;
+    }
 
     if (s.mode === "lor-braise") {
       const isCurryStep3 = s.dishName === "CURRY FENG" && s.braiseVariant === "chili-pork";
@@ -1243,6 +1372,53 @@ export function createGame({ canvas, startBtn, restartBtn, hud }) {
   function handleStep2ComboKey(code) {
     const s = game.step2;
     if (!s.active || s.intro) return;
+
+    if (s.mode === "laksa-saute") {
+      if (s.phase === "cook") {
+        s.lastTapAt = performance.now();
+        const center = (Number(s.heatSweetMin ?? 0.44) + Number(s.heatSweetMax ?? 0.56)) / 2;
+
+        const pointer = Number(s.heatPointer || 0.5);
+        s.heatPointer = Math.max(0, Math.min(1, pointer + (center - pointer) * 0.72));
+        s.aromaMeter = Math.max(0, Math.min(1, Number(s.aromaMeter || 0) + 0.045));
+        game.score += 10;
+        playBeep(760, 0.04);
+
+        updateHUD();
+        return;
+      }
+
+      if (s.phase !== "addOilPaste") return;
+
+      const expected = s.comboSeq[s.comboIndex];
+      if (!expected) return;
+
+      if (code !== expected) {
+        s.comboIndex = 0;
+        applyPenalty("wrongInput");
+        setAlert("WRONG KEY! COMBO RESET", "rgba(255, 89, 94, 0.92)", 0.55);
+        return;
+      }
+
+      s.comboIndex++;
+      game.score += 20;
+      updateHUD();
+      playBeep(640 + s.comboIndex * 28, 0.045);
+
+      if (s.comboIndex < s.comboSeq.length) {
+        setAlert(`COMBO ${s.comboIndex}/${s.comboSeq.length}`, "rgba(255, 224, 102, 0.95)", 0.45);
+        return;
+      }
+
+      s.comboIndex = 0;
+      s.phase = "addOilPasteAnim";
+      s.transitionT = 0.9;
+      game.score += 85;
+      updateHUD();
+      playBeep(760, 0.08);
+      setAlert("ADDING OIL + PASTE...", "rgba(128, 255, 114, 0.92)", 0.75);
+      return;
+    }
 
     if (s.mode === "lor-braise") {
       if (s.phase === "heat") {
@@ -1364,8 +1540,41 @@ export function createGame({ canvas, startBtn, restartBtn, hud }) {
   }
 
   function startStep3Intro() {
+    const isLaksaBrothFlow = game.currentDish?.name === "LAKSA SIGLAP";
     const targetCode = QWER_CODES[Math.floor(Math.random() * QWER_CODES.length)];
     const usesLorStyleFlow = ["LOR KAI YIK", "CURRY FENG"].includes(game.currentDish?.name);
+
+    if (isLaksaBrothFlow) {
+      const comboLen = 4;
+      const comboSeq = Array.from({ length: comboLen }, () => QWER_CODES[Math.floor(Math.random() * QWER_CODES.length)]);
+      game.step3Intro = {
+        active: true,
+        timer: 5,
+        animT: 0,
+        dishName: game.currentDish?.name || "",
+        mode: "laksa-broth"
+      };
+      game.step3 = {
+        ...game.step3,
+        active: false,
+        mode: "laksa-broth",
+        phase: "pourCoconut",
+        coconutFill: 0,
+        coconutTarget: 0.72,
+        coconutOverflow: 0.9,
+        transitionT: 0,
+        simmerTimer: 2.2,
+        simmerDuration: 2.2,
+        comboSeq,
+        comboIndex: 0,
+        comboLen,
+        finishTimer: 1.9,
+        animT: 0
+      };
+      setAlert("STEP 3 INTRO", "rgba(255, 224, 102, 0.95)", 0.9);
+      return;
+    }
+
     game.step3Intro = {
       active: true,
       timer: 5,
@@ -1390,6 +1599,34 @@ export function createGame({ canvas, startBtn, restartBtn, hud }) {
   }
 
   function startStep4Intro() {
+    if (game.currentDish?.name === "LAKSA SIGLAP") {
+      const comboLen = 4;
+      const comboSeq = Array.from({ length: comboLen }, () => QWER_CODES[Math.floor(Math.random() * QWER_CODES.length)]);
+      game.step4Intro = {
+        active: true,
+        timer: 5,
+        animT: 0,
+        dishName: game.currentDish?.name || "",
+        mode: "laksa-serve"
+      };
+      game.step4 = {
+        ...game.step4,
+        active: false,
+        mode: "laksa-serve",
+        phase: "addRice",
+        comboSeq,
+        comboIndex: 0,
+        comboLen,
+        timeLeft: 6,
+        duration: 6,
+        animT: 0,
+        phaseT: 0,
+        finalT: 0
+      };
+      setAlert("STEP 4 INTRO", "rgba(255, 224, 102, 0.95)", 0.9);
+      return;
+    }
+
     const comboLen = 3;
     const comboSeq = Array.from({ length: comboLen }, () => QWER_CODES[Math.floor(Math.random() * QWER_CODES.length)]);
     game.step4Intro = {
@@ -1421,6 +1658,10 @@ export function createGame({ canvas, startBtn, restartBtn, hud }) {
     if (game.step3Intro.timer <= 0) {
       game.step3Intro.active = false;
       game.step3.active = true;
+      if (String(game.step3?.mode || "") === "laksa-broth") {
+        setAlert("HOLD GREEN BUTTON TO POUR COCONUT MILK", "rgba(128, 255, 114, 0.92)", 1.0);
+        return;
+      }
       const usesLorStyleFlow = ["LOR KAI YIK", "CURRY FENG"].includes(game.currentDish?.name);
       setAlert(
         usesLorStyleFlow
@@ -1434,6 +1675,40 @@ export function createGame({ canvas, startBtn, restartBtn, hud }) {
 
   function handleStep3TimingKey(code) {
     const s = game.step3;
+    if (String(s?.mode || "") === "laksa-broth") {
+      if (!s.active) return;
+      if (s.phase !== "addShrimp") return;
+
+      const expected = s.comboSeq[s.comboIndex];
+      if (!expected) return;
+
+      if (code !== expected) {
+        s.comboIndex = 0;
+        applyPenalty("wrongInput");
+        setAlert("WRONG BUTTON! SHRIMP COMBO RESET", "rgba(255, 89, 94, 0.92)", 0.6);
+        return;
+      }
+
+      s.comboIndex++;
+      game.score += 22;
+      updateHUD();
+      playBeep(650 + s.comboIndex * 24, 0.045);
+
+      if (s.comboIndex < s.comboSeq.length) {
+        setAlert(`SHRIMP COMBO ${s.comboIndex}/${s.comboSeq.length}`, "rgba(255, 224, 102, 0.95)", 0.45);
+        return;
+      }
+
+      s.comboIndex = 0;
+      s.phase = "addShrimpAnim";
+      s.transitionT = 0.95;
+      game.score += 120;
+      updateHUD();
+      playBeep(800, 0.08);
+      setAlert("ADDING SHRIMP...", "rgba(128, 255, 114, 0.92)", 0.8);
+      return;
+    }
+
     if (!shouldRunStep3GameplayFlow()) return;
     if (!s.active || s.finishAnim) return;
     const usesLorStyleFlow = ["LOR KAI YIK", "CURRY FENG"].includes(game.currentDish?.name);
@@ -1477,6 +1752,10 @@ export function createGame({ canvas, startBtn, restartBtn, hud }) {
     if (game.step4Intro.timer <= 0) {
       game.step4Intro.active = false;
       game.step4.active = true;
+      if (String(game.step4?.mode || "") === "laksa-serve") {
+        setAlert("COMPLETE COMBO TO ADD RICE", "rgba(128, 255, 114, 0.92)", 0.9);
+        return;
+      }
       setAlert("COMPLETE 3-BUTTON COMBO IN 5 SECONDS", "rgba(128, 255, 114, 0.92)", 0.9);
     }
   }
@@ -1502,6 +1781,50 @@ export function createGame({ canvas, startBtn, restartBtn, hud }) {
   function handleStep4Key(code) {
     const s = game.step4;
     if (!s.active) return;
+
+    if (String(s.mode || "") === "laksa-serve") {
+      if (s.phase === "scoopTap") {
+        s.phase = "scoopToBrothAnim";
+        s.phaseT = 0;
+        game.score += 90;
+        updateHUD();
+        playBeep(760, 0.06);
+        setAlert("SCOOPING BROTH...", "rgba(128, 255, 114, 0.92)", 0.7);
+        return;
+      }
+
+      if (s.phase !== "addRice") return;
+
+      const expectedLaksa = s.comboSeq[s.comboIndex];
+      if (!expectedLaksa) return;
+
+      if (code !== expectedLaksa) {
+        s.comboIndex = 0;
+        applyPenalty("wrongInput");
+        setAlert("WRONG BUTTON! COMBO RESET", "rgba(255, 89, 94, 0.92)", 0.6);
+        return;
+      }
+
+      s.comboIndex++;
+      game.score += 20;
+      updateHUD();
+      playBeep(620 + s.comboIndex * 22, 0.045);
+
+      if (s.comboIndex < s.comboSeq.length) {
+        setAlert(`RICE COMBO ${s.comboIndex}/${s.comboSeq.length}`, "rgba(255, 224, 102, 0.95)", 0.45);
+        return;
+      }
+
+      s.phase = "addRiceAnim";
+      s.phaseT = 0;
+      s.comboIndex = 0;
+      game.score += 120;
+      updateHUD();
+      playBeep(770, 0.07);
+      setAlert("ADDING RICE...", "rgba(128, 255, 114, 0.92)", 0.75);
+      return;
+    }
+
     if (s.phase !== "combo") return;
     const expected = s.comboSeq[s.comboIndex];
     if (!expected) return;
@@ -1536,6 +1859,55 @@ export function createGame({ canvas, startBtn, restartBtn, hud }) {
     if (!s.active) return;
 
     s.animT += dt;
+
+    if (String(s.mode || "") === "laksa-serve") {
+      if (s.phase === "addRice") {
+        s.timeLeft = Math.max(0, Number(s.timeLeft || 0) - dt);
+        if (s.timeLeft <= 0) {
+          s.comboIndex = 0;
+          s.timeLeft = Number(s.duration || 6);
+          applyPenalty("wrongInput");
+          setAlert("TIME UP! RICE COMBO RESET", "rgba(255, 89, 94, 0.92)", 0.65);
+        }
+        return;
+      }
+
+      if (s.phase === "addRiceAnim") {
+        s.phaseT += dt;
+        if (s.phaseT >= 0.85) {
+          s.phase = "scoopTap";
+          s.phaseT = 0;
+          setAlert("TAP ANY BUTTON TO SCOOP BROTH", "rgba(255, 224, 102, 0.95)", 0.9);
+        }
+        return;
+      }
+
+      if (s.phase === "scoopToBrothAnim") {
+        s.phaseT += dt;
+        if (s.phaseT >= 0.65) {
+          s.phase = "scoopToBowlAnim";
+          s.phaseT = 0;
+        }
+        return;
+      }
+
+      if (s.phase === "scoopToBowlAnim") {
+        s.phaseT += dt;
+        if (s.phaseT >= 0.85) {
+          s.phase = "final";
+          s.finalT = 2.2;
+          s.phaseT = 0;
+          setAlert("LAKSA SIGLAP SERVED!", "rgba(128, 255, 114, 0.95)", 0.9);
+        }
+        return;
+      }
+
+      if (s.phase === "final") {
+        s.finalT = Math.max(0, Number(s.finalT || 0) - dt);
+        if (s.finalT <= 0) completeStep4Flow();
+      }
+      return;
+    }
 
     if (s.phase === "combo") {
       s.timeLeft = Math.max(0, Number(s.timeLeft || 0) - dt);
@@ -1576,9 +1948,87 @@ export function createGame({ canvas, startBtn, restartBtn, hud }) {
   }
 
   function updateStep3Gameplay(dt) {
+    const s = game.step3;
+    if (!s || !s.active) return;
+
+    if (String(s.mode || "") === "laksa-broth") {
+      s.animT = Number(s.animT || 0) + dt;
+
+      if (s.phase === "pourCoconut") {
+        const holdingPour = heldCodes.has("KeyW");
+        const target = Math.max(0.2, Math.min(0.98, Number(s.coconutTarget || 0.72)));
+        const overflow = Math.max(target + 0.05, Math.min(1, Number(s.coconutOverflow || 0.9)));
+
+        if (holdingPour) {
+          s.coconutFill = Math.min(1, Number(s.coconutFill || 0) + dt / 1.25);
+        } else {
+          s.coconutFill = Math.max(0, Number(s.coconutFill || 0) - dt * 0.18);
+        }
+
+        if (Number(s.coconutFill || 0) >= overflow) {
+          s.coconutFill = target * 0.82;
+          applyPenalty("wrongInput");
+          setAlert("OVERFLOW! HOLD MORE GENTLY", "rgba(255, 89, 94, 0.92)", 0.55);
+        }
+
+        if (holdingPour && Number(s.coconutFill || 0) >= target && Number(s.coconutFill || 0) < overflow) {
+          s.phase = "coconutAnim";
+          s.transitionT = 0.9;
+          game.score += 110;
+          updateHUD();
+          playBeep(770, 0.08);
+          setAlert("COCONUT MILK ADDED", "rgba(128, 255, 114, 0.92)", 0.75);
+        }
+        return;
+      }
+
+      if (s.phase === "coconutAnim") {
+        s.transitionT = Math.max(0, Number(s.transitionT || 0) - dt);
+        if (s.transitionT <= 0) {
+          s.phase = "simmer";
+          s.simmerTimer = Math.max(1.6, Number(s.simmerDuration || 2.2));
+          setAlert("GENTLE SIMMER...", "rgba(255, 224, 102, 0.95)", 0.7);
+        }
+        return;
+      }
+
+      if (s.phase === "simmer") {
+        s.simmerTimer = Math.max(0, Number(s.simmerTimer || 0) - dt);
+        if (s.simmerTimer <= 0) {
+          s.phase = "addShrimp";
+          s.comboSeq = Array.from({ length: Math.max(3, Number(s.comboLen || 4)) }, () => QWER_CODES[Math.floor(Math.random() * QWER_CODES.length)]);
+          s.comboIndex = 0;
+          setAlert("COMPLETE COMBO TO ADD SHRIMP", "rgba(255, 224, 102, 0.95)", 0.8);
+        }
+        return;
+      }
+
+      if (s.phase === "addShrimpAnim") {
+        s.transitionT = Math.max(0, Number(s.transitionT || 0) - dt);
+        if (s.transitionT <= 0) {
+          s.phase = "finish";
+          s.finishTimer = Math.max(1.6, Number(s.finishTimer || 1.9));
+          setAlert("BROTH COMPLETE!", "rgba(128, 255, 114, 0.95)", 0.85);
+        }
+        return;
+      }
+
+      if (s.phase === "finish") {
+        s.finishTimer = Math.max(0, Number(s.finishTimer || 0) - dt);
+        if (s.finishTimer <= 0) {
+          s.active = false;
+          awardStepPoints(1.2);
+          if (game.currentDish?.name === "LAKSA SIGLAP") {
+            game.stepIndex = Math.min(game.steps.length - 1, 8);
+          }
+          advanceStep();
+        }
+      }
+      return;
+    }
+
     if (!shouldRunStep3GameplayFlow()) return;
 
-    const s = game.step3;
     if (!s.active) s.active = true;
 
     if (!s.finishAnim) {
@@ -2309,13 +2759,18 @@ function handlePrepOrActionPress(pressedIngredient) {
     }
     if (game.step4.active) {
       if (e.repeat) return;
+      if (String(game.step4?.mode || "") === "laksa-serve" && String(game.step4?.phase || "") === "scoopTap") {
+        e.preventDefault();
+        handleStep4Key(e.code || "KeyW");
+        return;
+      }
       if (!QWER_CODES.includes(e.code)) return;
       e.preventDefault();
       pulseKeyGlow(e.code);
       handleStep4Key(e.code);
       return;
     }
-    if (shouldRunStep3GameplayFlow() && game.step3.active) {
+    if ((shouldRunStep3GameplayFlow() || String(game.step3?.mode || "") === "laksa-broth") && game.step3.active) {
       if (e.repeat) return;
       if (!QWER_CODES.includes(e.code)) return;
       e.preventDefault();
@@ -2531,7 +2986,7 @@ function handlePrepOrActionPress(pressedIngredient) {
         updateDishCountdown(dt);
         updateShake(dt);
         if (game.dishCountdown <= 0) {
-          if (shouldRunStep3GameplayFlow()) {
+          if (shouldRunStep3GameplayFlow() || (game.step3.active && String(game.step3?.mode || "") === "laksa-broth")) {
             updateStep3Gameplay(dt);
           } else {
             updateCookStep(dt);
@@ -2585,7 +3040,7 @@ function handlePrepOrActionPress(pressedIngredient) {
         drawStep4Intro(ctx, canvas, game.step4Intro, assets);
       } else if (game.step4.active) {
         drawStep4Gameplay(ctx, canvas, game, assets, uiBottomY, bottomUiTop);
-      } else if (shouldRunStep3GameplayFlow()) {
+      } else if (shouldRunStep3GameplayFlow() || (game.step3.active && String(game.step3?.mode || "") === "laksa-broth")) {
         drawStep3Gameplay(ctx, canvas, game, assets, uiBottomY, bottomUiTop);
       } else {
         let y = uiBottomY;
