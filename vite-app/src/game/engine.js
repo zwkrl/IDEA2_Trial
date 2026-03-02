@@ -1638,6 +1638,7 @@ export function createGame({ canvas, startBtn, restartBtn, hud }) {
     game.step4 = {
       ...game.step4,
       active: false,
+      mode: "default",
       phase: "combo",
       comboSeq,
       comboIndex: 0,
