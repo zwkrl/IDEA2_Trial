@@ -563,6 +563,16 @@ export function createGame({ canvas, startBtn, restartBtn, hud }) {
     game.plateIcons = [];
     game.sequence = [...game.currentDish.ingredients];
 
+    game.step1.active = false;
+    game.step1.intro = false;
+    game.step2.active = false;
+    game.step2.intro = false;
+    game.step3Intro.active = false;
+    game.step3.active = false;
+    game.step3.finishAnim = false;
+    game.step4Intro.active = false;
+    game.step4.active = false;
+
     game.keyMap = [...game.sequence];
     shuffle(game.keyMap);
 
@@ -1553,6 +1563,9 @@ export function createGame({ canvas, startBtn, restartBtn, hud }) {
     const targetCode = QWER_CODES[Math.floor(Math.random() * QWER_CODES.length)];
     const usesLorStyleFlow = ["LOR KAI YIK", "CURRY FENG"].includes(game.currentDish?.name);
 
+    game.step4Intro.active = false;
+    game.step4.active = false;
+
     if (isLaksaBrothFlow) {
       const comboLen = 4;
       const comboSeq = Array.from({ length: comboLen }, () => QWER_CODES[Math.floor(Math.random() * QWER_CODES.length)]);
@@ -1593,6 +1606,7 @@ export function createGame({ canvas, startBtn, restartBtn, hud }) {
     game.step3 = {
       ...game.step3,
       active: false,
+      mode: "timed-stir",
       pointer: 0.5,
       pointerDir: 1,
       sweetMin: 0.42,

@@ -39,6 +39,33 @@ function drawImageContainCentered(ctx, img, cx, cy, w, h) {
   drawImageContain(ctx, img, cx - w / 2, cy - h / 2, w, h);
 }
 
+function drawCenteredFittedText(
+  ctx,
+  text,
+  x,
+  y,
+  maxWidth,
+  {
+    fontSize = 30,
+    minFontSize = 16,
+    fontFamily = "Courier New",
+    fontWeight = "bold"
+  } = {}
+) {
+  const label = String(text || "");
+  let size = Math.max(1, Number(fontSize || 30));
+  const minSize = Math.max(1, Number(minFontSize || 16));
+
+  while (size > minSize) {
+    ctx.font = `${fontWeight} ${size}px ${fontFamily}`;
+    if (ctx.measureText(label).width <= maxWidth) break;
+    size -= 1;
+  }
+
+  ctx.font = `${fontWeight} ${size}px ${fontFamily}`;
+  ctx.fillText(label, x, y);
+}
+
 function drawButtonIcon(ctx, assets, label, x, y, size, { glow = false } = {}) {
   const key = String(label || "").toUpperCase();
   const img = assets?.[KEY_TO_BUTTON_ASSET[key]];
@@ -1410,8 +1437,7 @@ export function drawStep2Gameplay(ctx, canvas, step2, assets = {}) {
     ctx.strokeRect(instructionX - 330, instructionY - 52, 660, 108);
 
     ctx.fillStyle = "#ffe066";
-    ctx.font = "bold 30px Courier New";
-    ctx.fillText("Step 2: Sauté the Chili Paste Until Fragrant", instructionX, instructionY - 20);
+    drawCenteredFittedText(ctx, "Step 2: Sauté the Chili Paste Until Fragrant", instructionX, instructionY - 20, 612);
 
     ctx.fillStyle = "#d7d7d7";
     ctx.font = "19px Courier New";
@@ -1658,8 +1684,7 @@ export function drawStep2Gameplay(ctx, canvas, step2, assets = {}) {
     ctx.strokeRect(instructionX - 320, instructionY - 52, 640, 108);
 
     ctx.fillStyle = "#ffe066";
-    ctx.font = "bold 30px Courier New";
-    ctx.fillText(stepTitle, instructionX, instructionY - 20);
+    drawCenteredFittedText(ctx, stepTitle, instructionX, instructionY - 20, 592);
 
     ctx.fillStyle = "#d7d7d7";
     ctx.font = "19px Courier New";
@@ -1859,8 +1884,7 @@ export function drawStep2Gameplay(ctx, canvas, step2, assets = {}) {
   ctx.strokeRect(instructionX - 280, instructionY - 52, 560, 108);
 
   ctx.fillStyle = "#ffe066";
-  ctx.font = "bold 30px Courier New";
-  ctx.fillText("Step 2: Start Cooking the Chicken", instructionX, instructionY - 20);
+  drawCenteredFittedText(ctx, "Step 2: Start Cooking the Chicken", instructionX, instructionY - 20, 512);
 
   ctx.fillStyle = "#d7d7d7";
   ctx.font = "19px Courier New";
@@ -2420,7 +2444,7 @@ export function drawStep3Gameplay(ctx, canvas, game, assets = {}, yTop = 140, bo
     ctx.font = "16px Courier New";
     const done = Math.max(0, Number(s3.hitsDone || 0));
     const need = Math.max(1, Number(s3.hitsNeed || 3));
-    ctx.fillText(usesLorStyleFlow ? "spam the button to keep the slider in the middle" : `Timed Hits ${done}/${need}`, canvas.width / 2, infoY + 30);
+    ctx.fillText(usesLorStyleFlow ? "Time the button when the slider reaches green" : `Timed Hits ${done}/${need}`, canvas.width / 2, infoY + 30);
   }
 
   if (s3.finishAnim) {
@@ -2913,8 +2937,7 @@ export function drawStep1Gameplay(ctx, canvas, step1, assets = {}) {
     ctx.strokeRect(instructionX - 310, instructionY - 52, 620, 108);
 
     ctx.fillStyle = "#ffe066";
-    ctx.font = "bold 30px Courier New";
-    ctx.fillText("Step 1: Make the Laksa Chili Paste", instructionX, instructionY - 20);
+    drawCenteredFittedText(ctx, "Step 1: Make the Laksa Chili Paste", instructionX, instructionY - 20, 572);
 
     ctx.fillStyle = "#d7d7d7";
     ctx.font = "19px Courier New";
@@ -3055,8 +3078,7 @@ export function drawStep1Gameplay(ctx, canvas, step1, assets = {}) {
     ctx.strokeRect(instructionX - 270, instructionY - 52, 540, 108);
 
     ctx.fillStyle = "#ffe066";
-    ctx.font = "bold 30px Courier New";
-    ctx.fillText("Step 1: Prep the Garlic and Ginger", instructionX, instructionY - 20);
+    drawCenteredFittedText(ctx, "Step 1: Prep the Garlic and Ginger", instructionX, instructionY - 20, 492);
 
     ctx.fillStyle = "#d7d7d7";
     ctx.font = "19px Courier New";
