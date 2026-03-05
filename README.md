@@ -3,6 +3,7 @@ This project runs on Vite and requires Node.js to be installed (version 12.2.0 o
 
 * Only use dev version when doing normal development, build once ready to deploy final vers or when testing prod vers
 * To bypass scanning page for testing, add /?test=true to end of localhost:port
+* To reset leaderboard, clear browsing history
 * feature/branch-name for new features
 * fix/branch-name for bug fixes
   
