@@ -1,5 +1,5 @@
 ﻿// src/game/render.js
-import { ingredientPool } from "./data.js";
+import { ingredientPool, getDishStepTitle } from "./data.js";
 
 const KEY_TO_BUTTON_ASSET = {
   Q: "btn_q",
@@ -21,6 +21,10 @@ function slugifyDishName(name) {
     .trim()
     .replace(/[^a-z0-9]+/g, "-")
     .replace(/^-+|-+$/g, "");
+}
+
+function stepTitle(dishName, stepIndex, fallback) {
+  return getDishStepTitle(dishName, stepIndex, fallback);
 }
 
 function drawImageContain(ctx, img, x, y, w, h) {
@@ -1188,6 +1192,7 @@ export function drawStep1Intro(ctx, canvas, step1, assets = {}) {
   const t = Number(step1?.introTimer || 0);
   const isChineseStep1 = String(step1?.mode || "") === "chinese-chop";
   const isLaksaStep1 = String(step1?.mode || "") === "laksa-paste";
+  const dishName = String(step1?.dishName || "");
 
   ctx.save();
   ctx.fillStyle = "rgba(0,0,0,0.68)";
@@ -1204,15 +1209,16 @@ export function drawStep1Intro(ctx, canvas, step1, assets = {}) {
 
   ctx.fillStyle = "#ffe066";
   ctx.font = "bold 44px Courier New";
-  ctx.fillText(
+  const title = stepTitle(
+    dishName,
+    0,
     isChineseStep1
       ? "Step 1: Prep the Garlic and Ginger"
       : isLaksaStep1
         ? "Step 1: Make the Laksa Chili Paste"
-        : "Step 1: Crack & Make Paste",
-    canvas.width / 2,
-    panelY + 76
+        : "Step 1: Crack & Make Paste"
   );
+  ctx.fillText(title, canvas.width / 2, panelY + 76);
 
   ctx.fillStyle = "#d7d7d7";
   ctx.font = "20px Courier New";
@@ -1277,6 +1283,7 @@ export function getStep2ButtonRects(canvas) {
 export function drawStep2Intro(ctx, canvas, step2, assets = {}) {
   const t = Number(step2?.introTimer || 0);
   if (String(step2?.mode || "") === "laksa-saute") {
+    const dishName = String(step2?.dishName || "LAKSA SIGLAP");
     const pan = assets?.step2_eurasian_fry_pan || assets?.laksa_step2_oilpaste_pan || assets?.step2_pot;
     const demoT = Number(step2?.animT || 0);
 
@@ -1295,7 +1302,7 @@ export function drawStep2Intro(ctx, canvas, step2, assets = {}) {
 
     ctx.fillStyle = "#ffe066";
     ctx.font = "bold 40px Courier New";
-    ctx.fillText("Step 2: Sauté the Chili Paste Until Fragrant.", canvas.width / 2, panelY + 64);
+    ctx.fillText(stepTitle(dishName, 1, "Step 2: Sauté the Chili Paste Until Fragrant"), canvas.width / 2, panelY + 64);
 
     ctx.fillStyle = "#d7d7d7";
     ctx.font = "20px Courier New";
@@ -1337,7 +1344,8 @@ export function drawStep2Intro(ctx, canvas, step2, assets = {}) {
   }
 
   const isChineseStep2 = String(step2?.mode || "") === "lor-braise";
-  const isCurryFeng = String(step2?.dishName || "") === "CURRY FENG";
+  const dishName = String(step2?.dishName || "");
+  const isCurryFeng = dishName === "CURRY FENG";
   const isCurryStep3Braise = isCurryFeng && String(step2?.braiseVariant || "") === "chili-pork";
 
   ctx.save();
@@ -1355,17 +1363,13 @@ export function drawStep2Intro(ctx, canvas, step2, assets = {}) {
 
   ctx.fillStyle = "#ffe066";
   ctx.font = "bold 44px Courier New";
-  ctx.fillText(
-    isCurryFeng && !isCurryStep3Braise
-      ? "Step 2: Fry the Aromatics Until Fragrant"
-      : isCurryStep3Braise
-        ? "Step 3: Add the Pork and Build the Curry"
-        : isChineseStep2
-          ? "Step 2: Add Chicken and Start the Braise"
-          : "Step 2: Start Cooking the Chicken",
-    canvas.width / 2,
-    panelY + 88
-  );
+  const titleStepIndex = isCurryStep3Braise ? 2 : 1;
+  const fallbackTitle = isCurryStep3Braise
+    ? "Step 3: Add the Pork and Build the Curry"
+    : isChineseStep2
+      ? "Step 2: Add Chicken and Start the Braise"
+      : "Step 2: Start Cooking the Chicken";
+  ctx.fillText(stepTitle(dishName, titleStepIndex, fallbackTitle), canvas.width / 2, panelY + 88);
 
   ctx.fillStyle = "#d7d7d7";
   ctx.font = "20px Courier New";
@@ -1374,7 +1378,7 @@ export function drawStep2Intro(ctx, canvas, step2, assets = {}) {
       ? (
         isCurryStep3Braise
           ? "Metal pot ready. Add chili, then pork."
-          : (isCurryFeng ? "Metal pot ready. Add oil + chopped garlic/ginger, then chicken." : "Metal pot ready. Add oil + clove, then chicken.")
+          : (isCurryFeng ? "Fry pan ready. Add oil + chopped garlic/ginger, then fry until fragrant." : "Metal pot ready. Add oil + clove, then chicken.")
       )
       : "Prepare the pot, add paste, then add chicken.",
     canvas.width / 2,
@@ -1403,6 +1407,7 @@ export function drawStep2Intro(ctx, canvas, step2, assets = {}) {
 
 export function drawStep2Gameplay(ctx, canvas, step2, assets = {}) {
   if (String(step2?.mode || "") === "laksa-saute") {
+    const dishName = String(step2?.dishName || "LAKSA SIGLAP");
     const phase = String(step2?.phase || "addOilPaste");
     const comboSeq = Array.isArray(step2?.comboSeq) ? step2.comboSeq : [];
     const comboIndex = Math.max(0, Number(step2?.comboIndex || 0));
@@ -1437,7 +1442,7 @@ export function drawStep2Gameplay(ctx, canvas, step2, assets = {}) {
     ctx.strokeRect(instructionX - 330, instructionY - 52, 660, 108);
 
     ctx.fillStyle = "#ffe066";
-    drawCenteredFittedText(ctx, "Step 2: Sauté the Chili Paste Until Fragrant", instructionX, instructionY - 20, 612);
+    drawCenteredFittedText(ctx, stepTitle(dishName, 1, "Step 2: Sauté the Chili Paste Until Fragrant"), instructionX, instructionY - 20, 612);
 
     ctx.fillStyle = "#d7d7d7";
     ctx.font = "19px Courier New";
@@ -1604,15 +1609,18 @@ export function drawStep2Gameplay(ctx, canvas, step2, assets = {}) {
 
   if (String(step2?.mode || "") === "lor-braise") {
     const PROCESS_IMG_SIZE = 180;
-    const isCurryFeng = String(step2?.dishName || "") === "CURRY FENG";
+    const dishName = String(step2?.dishName || "");
+    const isCurryFeng = dishName === "CURRY FENG";
     const isCurryStep3Braise = isCurryFeng && String(step2?.braiseVariant || "") === "chili-pork";
-    const stepTitle = isCurryFeng && !isCurryStep3Braise
-      ? "Step 2: Fry the Aromatics Until Fragrant"
-      : isCurryStep3Braise
-      ? "Step 3: Add the Pork and Build the Curry"
-      : "Step 2: Add Chicken and Start the Braise";
+    const stepTitleText = stepTitle(
+      dishName,
+      isCurryStep3Braise ? 2 : 1,
+      isCurryStep3Braise
+        ? "Step 3: Add the Pork and Build the Curry"
+        : "Step 2: Add Chicken and Start the Braise"
+    );
     const add1Label = isCurryStep3Braise ? "chili" : "clove";
-    const add2Label = isCurryStep3Braise ? "pork" : "chicken";
+    const add2Label = isCurryStep3Braise ? "pork" : (isCurryFeng ? "chopped garlic/ginger" : "chicken");
     const phaseText = {
       addOilClove: isCurryFeng
         ? (isCurryStep3Braise ? "Complete sequence to add oil & chili" : "Complete sequence to add oil & chopped garlic/ginger")
@@ -1620,8 +1628,12 @@ export function drawStep2Gameplay(ctx, canvas, step2, assets = {}) {
       addOilCloveAnim: isCurryFeng
         ? (isCurryStep3Braise ? "Adding oil & chili..." : "Adding oil & chopped garlic/ginger...")
         : "Adding oil & clove...",
-      addChicken: `Complete sequence to add ${add2Label} pieces`,
-      addChickenAnim: `Adding ${add2Label} pieces...`,
+      addChicken: isCurryFeng && !isCurryStep3Braise
+        ? `Complete sequence to add ${add2Label}`
+        : `Complete sequence to add ${add2Label} pieces`,
+      addChickenAnim: isCurryFeng && !isCurryStep3Braise
+        ? `Adding ${add2Label}...`
+        : `Adding ${add2Label} pieces...`,
       heat: "spam button to keep in green area"
     }[step2?.phase] || "Start the braise";
 
@@ -1631,7 +1643,9 @@ export function drawStep2Gameplay(ctx, canvas, step2, assets = {}) {
         ? (isCurryStep3Braise ? "Oil and chili are pouring into the pot" : "Oil and chopped garlic/ginger are pouring into the pot")
         : "Oil and clove are pouring into the pot",
       addChicken: "Follow the shown sequence",
-      addChickenAnim: `${add2Label[0].toUpperCase()}${add2Label.slice(1)} pieces are going into the pot`,
+      addChickenAnim: isCurryFeng && !isCurryStep3Braise
+        ? "Chopped garlic/ginger is going into the pan"
+        : `${add2Label[0].toUpperCase()}${add2Label.slice(1)} pieces are going into the pot`,
       heat: `Hold heat in green zone (${Math.max(0, Number(step2?.heatTimer || 0)).toFixed(1)}s)`
     }[step2?.phase] || "";
 
@@ -1684,7 +1698,7 @@ export function drawStep2Gameplay(ctx, canvas, step2, assets = {}) {
     ctx.strokeRect(instructionX - 320, instructionY - 52, 640, 108);
 
     ctx.fillStyle = "#ffe066";
-    drawCenteredFittedText(ctx, stepTitle, instructionX, instructionY - 20, 592);
+    drawCenteredFittedText(ctx, stepTitleText, instructionX, instructionY - 20, 592);
 
     ctx.fillStyle = "#d7d7d7";
     ctx.font = "19px Courier New";
@@ -1884,7 +1898,13 @@ export function drawStep2Gameplay(ctx, canvas, step2, assets = {}) {
   ctx.strokeRect(instructionX - 280, instructionY - 52, 560, 108);
 
   ctx.fillStyle = "#ffe066";
-  drawCenteredFittedText(ctx, "Step 2: Start Cooking the Chicken", instructionX, instructionY - 20, 512);
+  drawCenteredFittedText(
+    ctx,
+    stepTitle(String(step2?.dishName || "AYAM BUAH KELUAK"), 1, "Step 2: Start Cooking the Chicken"),
+    instructionX,
+    instructionY - 20,
+    512
+  );
 
   ctx.fillStyle = "#d7d7d7";
   ctx.font = "19px Courier New";
@@ -2071,7 +2091,7 @@ export function drawStep3Intro(ctx, canvas, step3Intro, assets = {}) {
     ctx.textBaseline = "middle";
     ctx.fillStyle = "#ffe066";
     ctx.font = "bold 38px Courier New";
-    ctx.fillText("Step 3: Build the Coconut Broth and Cook the Shrimp.", canvas.width / 2, panelY + 62);
+    ctx.fillText(stepTitle(String(step3Intro?.dishName || "LAKSA SIGLAP"), 2, "Step 3: Build the Coconut Broth and Cook the Shrimp"), canvas.width / 2, panelY + 62);
 
     ctx.fillStyle = "#d7d7d7";
     ctx.font = "19px Courier New";
@@ -2088,7 +2108,8 @@ export function drawStep3Intro(ctx, canvas, step3Intro, assets = {}) {
     return;
   }
 
-  const usesLorStyleFlow = ["LOR KAI YIK", "CURRY FENG"].includes(String(step3Intro?.dishName || ""));
+  const dishName = String(step3Intro?.dishName || "");
+  const usesLorStyleFlow = ["LOR KAI YIK", "CURRY FENG"].includes(dishName);
 
   ctx.save();
   ctx.fillStyle = "rgba(0,0,0,0.74)";
@@ -2105,7 +2126,11 @@ export function drawStep3Intro(ctx, canvas, step3Intro, assets = {}) {
 
   ctx.fillStyle = "#ffe066";
   ctx.font = "bold 40px Courier New";
-  ctx.fillText(usesLorStyleFlow ? "Step 3: Slow Simmer Until Tender" : "Step 3: Stir Carefully", canvas.width / 2, panelY + 82);
+  ctx.fillText(
+    stepTitle(dishName, 2, usesLorStyleFlow ? "Step 3: Slow Simmer Until Tender" : "Step 3: Stir Carefully"),
+    canvas.width / 2,
+    panelY + 82
+  );
 
   ctx.fillStyle = "#d7d7d7";
   ctx.font = "18px Courier New";
@@ -2186,7 +2211,7 @@ export function drawStep3Gameplay(ctx, canvas, game, assets = {}, yTop = 140, bo
     ctx.strokeRect(canvas.width / 2 - 390, headerY - 40, 780, 100);
     ctx.fillStyle = "#ffe066";
     ctx.font = "bold 30px Courier New";
-    ctx.fillText("Step 3: Build the Coconut Broth and Cook the Shrimp", canvas.width / 2, headerY - 10);
+    ctx.fillText(stepTitle(String(game?.currentDish?.name || "LAKSA SIGLAP"), 2, "Step 3: Build the Coconut Broth and Cook the Shrimp"), canvas.width / 2, headerY - 10);
     ctx.fillStyle = "#a7c7ff";
     ctx.font = "15px Courier New";
     ctx.fillText(phaseText, canvas.width / 2, headerY + 16);
@@ -2356,7 +2381,11 @@ export function drawStep3Gameplay(ctx, canvas, game, assets = {}, yTop = 140, bo
 
     ctx.fillStyle = "#ffe066";
     ctx.font = "bold 30px Courier New";
-    ctx.fillText("Step 3: Stir Carefully", canvas.width / 2, headerY - 10);
+    ctx.fillText(
+      stepTitle(String(game?.currentDish?.name || "AYAM BUAH KELUAK"), 2, "Step 3: Stir Carefully"),
+      canvas.width / 2,
+      headerY - 10
+    );
     ctx.fillStyle = "#a7c7ff";
     ctx.font = "15px Courier New";
     ctx.fillText("Press the target button when pointer is in green zone", canvas.width / 2, headerY + 16);
@@ -2476,7 +2505,7 @@ export function drawStep4Intro(ctx, canvas, step4Intro, assets = {}) {
     ctx.textBaseline = "middle";
     ctx.fillStyle = "#ffe066";
     ctx.font = "bold 40px Courier New";
-    ctx.fillText("Step 4: Serve Laksa with Rice.", canvas.width / 2, panelY + 82);
+    ctx.fillText(stepTitle(String(step4Intro?.dishName || "LAKSA SIGLAP"), 3, "Step 4: Serve Laksa with Rice"), canvas.width / 2, panelY + 82);
 
     if (bowlNoodles) {
       drawImageContain(ctx, bowlNoodles, canvas.width / 2 - 250, panelY + 100, 500, 250);
@@ -2490,7 +2519,6 @@ export function drawStep4Intro(ctx, canvas, step4Intro, assets = {}) {
   }
 
   const usesLorStyleFlow = ["LOR KAI YIK", "CURRY FENG"].includes(dishName);
-  const dishNameTitle = dishName || "Your Dish";
 
   ctx.save();
   ctx.fillStyle = "rgba(0,0,0,0.74)";
@@ -2508,7 +2536,11 @@ export function drawStep4Intro(ctx, canvas, step4Intro, assets = {}) {
   ctx.fillStyle = "#ffe066";
   ctx.font = "bold 40px Courier New";
   ctx.fillText(
-    usesLorStyleFlow ? `Step 4: Plate and Serve ${dishNameTitle}!` : "Step 4: Plate and Serve Your Ayam Buah Keluak!",
+    stepTitle(
+      dishName || "AYAM BUAH KELUAK",
+      3,
+      usesLorStyleFlow ? "Step 4: Dish Up & Serve" : "Step 4: Dish Up & Serve"
+    ),
     canvas.width / 2,
     panelY + 88
   );
@@ -2575,7 +2607,7 @@ export function drawStep4Gameplay(ctx, canvas, game, assets = {}, yTop = 140, bo
     ctx.strokeRect(canvas.width / 2 - 390, headerY - 42, 780, 106);
     ctx.fillStyle = "#ffe066";
     ctx.font = "bold 30px Courier New";
-    ctx.fillText("Step 4: Serve Laksa with Rice", canvas.width / 2, headerY - 12);
+    ctx.fillText(stepTitle(String(game?.currentDish?.name || "LAKSA SIGLAP"), 3, "Step 4: Serve Laksa with Rice"), canvas.width / 2, headerY - 12);
     ctx.fillStyle = "#a7c7ff";
     ctx.font = "15px Courier New";
     ctx.fillText(phaseText, canvas.width / 2, headerY + 18);
@@ -2745,7 +2777,7 @@ export function drawStep4Gameplay(ctx, canvas, game, assets = {}, yTop = 140, bo
 
   ctx.fillStyle = "#ffe066";
   ctx.font = "bold 30px Courier New";
-  ctx.fillText("Step 4: Dish Up & Serve", canvas.width / 2, headerY - 12);
+  ctx.fillText(stepTitle(dishName || "AYAM BUAH KELUAK", 3, "Step 4: Dish Up & Serve"), canvas.width / 2, headerY - 12);
   ctx.fillStyle = "#a7c7ff";
   ctx.font = "15px Courier New";
   ctx.fillText("Press the shown colored buttons in order before time runs out", canvas.width / 2, headerY + 18);
@@ -2937,7 +2969,13 @@ export function drawStep1Gameplay(ctx, canvas, step1, assets = {}) {
     ctx.strokeRect(instructionX - 310, instructionY - 52, 620, 108);
 
     ctx.fillStyle = "#ffe066";
-    drawCenteredFittedText(ctx, "Step 1: Make the Laksa Chili Paste", instructionX, instructionY - 20, 572);
+    drawCenteredFittedText(
+      ctx,
+      stepTitle(String(step1?.dishName || "LAKSA SIGLAP"), 0, "Step 1: Make the Laksa Chili Paste"),
+      instructionX,
+      instructionY - 20,
+      572
+    );
 
     ctx.fillStyle = "#d7d7d7";
     ctx.font = "19px Courier New";
@@ -3078,7 +3116,13 @@ export function drawStep1Gameplay(ctx, canvas, step1, assets = {}) {
     ctx.strokeRect(instructionX - 270, instructionY - 52, 540, 108);
 
     ctx.fillStyle = "#ffe066";
-    drawCenteredFittedText(ctx, "Step 1: Prep the Garlic and Ginger", instructionX, instructionY - 20, 492);
+    drawCenteredFittedText(
+      ctx,
+      stepTitle(String(step1?.dishName || "LOR KAI YIK"), 0, "Step 1: Prep the Garlic and Ginger"),
+      instructionX,
+      instructionY - 20,
+      492
+    );
 
     ctx.fillStyle = "#d7d7d7";
     ctx.font = "19px Courier New";
@@ -3190,7 +3234,7 @@ export function drawStep1Gameplay(ctx, canvas, step1, assets = {}) {
 
   ctx.fillStyle = "#ffe066";
   ctx.font = "bold 30px Courier New";
-  ctx.fillText("Step 1: Crack & Make Paste", instructionX, instructionY - 20);
+  ctx.fillText(stepTitle(String(step1?.dishName || "AYAM BUAH KELUAK"), 0, "Step 1: Crack & Make Paste"), instructionX, instructionY - 20);
 
   ctx.fillStyle = "#d7d7d7";
   ctx.font = "19px Courier New";

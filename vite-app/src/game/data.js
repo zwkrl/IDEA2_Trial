@@ -34,6 +34,43 @@ export const PENALTY = {
   comboReset: true
 };
 
+export const DISH_STEP_TITLES = {
+  "AYAM BUAH KELUAK": [
+    "Step 1: Crack & Make Paste",
+    "Step 2: Start Cooking the Chicken",
+    "Step 3: Stir Carefully",
+    "Step 4: Dish Up & Serve"
+  ],
+  "LOR KAI YIK": [
+    "Step 1: Prep the Garlic and Ginger",
+    "Step 2: Add Chicken and Start the Braise",
+    "Step 3: Slow Simmer Until Tender",
+    "Step 4: Dish Up & Serve"
+  ],
+  "CURRY FENG": [
+    "Step 1: Prep the Aromatics - Garlic & Ginger",
+    "Step 2: Fry the Aromatics Until Fragrant",
+    "Step 3: Add the Pork and Build the Curry",
+    "Step 4: Ladle and Serve"
+  ],
+  "LAKSA SIGLAP": [
+    "Step 1: Make the Laksa Chili Paste",
+    "Step 2: Sauté the Chili Paste Until Fragrant",
+    "Step 3: Build the Coconut Broth and Cook the Shrimp",
+    "Step 4: Serve Laksa with Rice"
+  ]
+};
+
+export function getDishStepTitle(dishName, stepIndex, fallback = "") {
+  const key = String(dishName || "");
+  const idx = Math.max(0, Number(stepIndex) | 0);
+  const byDish = DISH_STEP_TITLES[key];
+  if (Array.isArray(byDish) && typeof byDish[idx] === "string" && byDish[idx]) {
+    return byDish[idx];
+  }
+  return String(fallback || "");
+}
+
 export const dishes = [
   {
     name: "AYAM BUAH KELUAK",
