@@ -1284,12 +1284,13 @@ export function createGame({ canvas, startBtn, restartBtn, hud }) {
 
     if (s.mode === "lor-braise") {
       const isCurryStep3 = s.dishName === "CURRY FENG" && s.braiseVariant === "chili-pork";
+      const isCurryStep2 = s.dishName === "CURRY FENG" && !isCurryStep3;
       if (s.intro) {
         s.introTimer = Math.max(0, s.introTimer - dt);
         if (s.introTimer <= 0) {
           s.intro = false;
           setAlert(
-            isCurryStep3 ? "COMPLETE COMBO TO ADD OIL + CHILI" : "COMPLETE COMBO TO ADD OIL + CLOVE",
+            isCurryStep3 ? "COMPLETE COMBO TO ADD CHILI" : isCurryStep2 ? "COMPLETE COMBO TO ADD OIL" : "COMPLETE COMBO TO ADD OIL + CLOVE",
             "rgba(255, 224, 102, 0.95)",
             0.85
           );
@@ -1304,7 +1305,7 @@ export function createGame({ canvas, startBtn, restartBtn, hud }) {
           s.comboSeq = Array.from({ length: s.comboLen || 4 }, () => QWER_CODES[Math.floor(Math.random() * QWER_CODES.length)]);
           s.comboIndex = 0;
           setAlert(
-            isCurryStep3 ? "OIL + CHILI ADDED! COMBO FOR PORK" : "OIL + CLOVE ADDED! COMBO FOR CHICKEN",
+            isCurryStep3 ? "CHILI ADDED! COMBO FOR PORK" : isCurryStep2 ? "OIL ADDED! COMBO FOR CHOPPED INGREDIENTS" : "OIL + CLOVE ADDED! COMBO FOR CHICKEN",
             "rgba(255, 224, 102, 0.95)",
             0.85
           );
@@ -1488,22 +1489,34 @@ export function createGame({ canvas, startBtn, restartBtn, hud }) {
       s.comboIndex = 0;
 
       if (s.phase === "addOilClove") {
+        const isCurryStep3 = s.dishName === "CURRY FENG" && s.braiseVariant === "chili-pork";
+        const isCurryStep2 = s.dishName === "CURRY FENG" && !isCurryStep3;
         s.phase = "addOilCloveAnim";
         s.transitionT = 0.9;
         game.score += 80;
         updateHUD();
         playBeep(720, 0.08);
-        setAlert("ADDING OIL + CLOVE...", "rgba(128, 255, 114, 0.92)", 0.75);
+        setAlert(
+          isCurryStep2 ? "ADDING OIL..." : isCurryStep3 ? "ADDING CHILI..." : "ADDING OIL + CLOVE...",
+          "rgba(128, 255, 114, 0.92)",
+          0.75
+        );
         return;
       }
 
       if (s.phase === "addChicken") {
+        const isCurryStep3 = s.dishName === "CURRY FENG" && s.braiseVariant === "chili-pork";
+        const isCurryStep2 = s.dishName === "CURRY FENG" && !isCurryStep3;
         s.phase = "addChickenAnim";
         s.transitionT = 0.9;
         game.score += 95;
         updateHUD();
         playBeep(780, 0.08);
-        setAlert("ADDING CHICKEN...", "rgba(128, 255, 114, 0.92)", 0.75);
+        setAlert(
+          isCurryStep2 ? "ADDING CHOPPED INGREDIENTS..." : isCurryStep3 ? "ADDING PORK..." : "ADDING CHICKEN...",
+          "rgba(128, 255, 114, 0.92)",
+          0.75
+        );
       }
       return;
     }

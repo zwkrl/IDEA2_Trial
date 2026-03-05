@@ -1623,10 +1623,10 @@ export function drawStep2Gameplay(ctx, canvas, step2, assets = {}) {
     const add2Label = isCurryStep3Braise ? "pork" : (isCurryFeng ? "chopped garlic/ginger" : "chicken");
     const phaseText = {
       addOilClove: isCurryFeng
-        ? (isCurryStep3Braise ? "Complete sequence to add oil & chili" : "Complete sequence to add oil & chopped garlic/ginger")
+        ? (isCurryStep3Braise ? "Complete sequence to add chili" : "Complete sequence to add oil & chopped garlic/ginger")
         : "Complete sequence to add oil & clove",
       addOilCloveAnim: isCurryFeng
-        ? (isCurryStep3Braise ? "Adding oil & chili..." : "Adding oil & chopped garlic/ginger...")
+        ? (isCurryStep3Braise ? "Adding chili..." : "Adding oil & chopped garlic/ginger...")
         : "Adding oil & clove...",
       addChicken: isCurryFeng && !isCurryStep3Braise
         ? `Complete sequence to add ${add2Label}`
@@ -1640,7 +1640,7 @@ export function drawStep2Gameplay(ctx, canvas, step2, assets = {}) {
     const hintText = {
       addOilClove: "Follow the shown sequence",
       addOilCloveAnim: isCurryFeng
-        ? (isCurryStep3Braise ? "Oil and chili are pouring into the pot" : "Oil and chopped garlic/ginger are pouring into the pot")
+        ? (isCurryStep3Braise ? "Chili is pouring into the pot" : "Oil and chopped garlic/ginger are pouring into the pot")
         : "Oil and clove are pouring into the pot",
       addChicken: "Follow the shown sequence",
       addChickenAnim: isCurryFeng && !isCurryStep3Braise
@@ -2305,7 +2305,21 @@ export function drawStep3Gameplay(ctx, canvas, game, assets = {}, yTop = 140, bo
       ctx.strokeRect(bx, by, barW, barH);
       ctx.fillStyle = "#a7c7ff";
       ctx.font = "15px Courier New";
-      ctx.fillText("Hold W (green) and stop at the green mark", canvas.width / 2, by - 14);
+      const leftText = "Hold ";
+      const rightText = " and stop at the green mark";
+      const iconSize = 22;
+      const textY = by - 14;
+      const leftW = ctx.measureText(leftText).width;
+      const rightW = ctx.measureText(rightText).width;
+      const totalW = leftW + iconSize + 8 + rightW;
+      let tx = canvas.width / 2 - totalW / 2;
+      ctx.textAlign = "left";
+      ctx.fillText(leftText, tx, textY);
+      tx += leftW;
+      drawButtonIcon(ctx, assets, "W", tx, textY - iconSize / 2, iconSize);
+      tx += iconSize + 8;
+      ctx.fillText(rightText, tx, textY);
+      ctx.textAlign = "center";
     }
 
     if (phase === "addShrimp" && comboSeq.length) {
@@ -2549,7 +2563,7 @@ export function drawStep4Intro(ctx, canvas, step4Intro, assets = {}) {
   ctx.font = "20px Courier New";
   ctx.fillText(
     usesLorStyleFlow
-      ? "Serving bowl ready. Add rice and stew, then serve."
+      ? (dishName === "CURRY FENG" ? "Serving bowl ready. Add stew, then serve." : "Serving bowl ready. Add rice and stew, then serve.")
       : "Complete the 3-button combo in 5 seconds to serve.",
     canvas.width / 2,
     panelY + 140
